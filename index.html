@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CCTV</title><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0e1116"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<!DOCTYPE html><html lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CCTV v12 · Smart Security</title><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0e1116"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <style>
 :root{--bg:#0e1116;--card:#171b22;--line:#252b36;--ac:#ff7a5c;--ac2:#ff4d8d;--tx:#e8eaf0;--mut:#8b93a3}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -40,9 +40,19 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 #tgp select{width:100%;padding:14px;border-radius:14px;color:var(--tx);border:1px solid var(--line);margin:8px 0}
 #tgp small{display:block;color:var(--mut);text-align:left;direction:ltr;margin:4px 0 10px;line-height:1.5}
 #tgm{margin-top:8px;min-height:20px;font-size:14px;word-break:break-word}
+
+/* v12 visual polish */
+body{background:radial-gradient(900px 500px at 50% -180px,#29202c 0%,var(--bg) 68%)}
+.box{max-width:560px;padding:22px 18px 28px}
+.btn{border-radius:17px;min-height:50px;letter-spacing:.1px;transition:transform .15s,filter .15s}
+.btn:active{transform:scale(.985);filter:brightness(1.08)}
+#vw{border:1px solid #ffffff17}
+.it{border-radius:17px;min-height:82px;box-shadow:0 5px 18px #0003}
+header{backdrop-filter:blur(12px)}
+#tgp .box{box-shadow:0 24px 80px #0009;border:1px solid #ffffff12}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v11</small></span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v12</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
 <button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button>
 <button class="btn g" onclick="location.href='multi.html'">🧩 All cameras (multi-view)</button>
@@ -99,7 +109,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const VER='v11',$=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v12',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
@@ -153,6 +163,20 @@ let instEv=null;
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEv=e;$('inst').style.display='block'});
 function doInst(){instEv&&instEv.prompt()}
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+
+/* ===== v12 local outage recording & recovery ===== */
+const offlineDB=new Promise((resolve,reject)=>{const r=indexedDB.open('cctv-offline-v12',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('clips'))r.result.createObjectStore('clips',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+async function offlineOp(mode,fn){const d=await offlineDB;return new Promise((resolve,reject)=>{const t=d.transaction('clips',mode);let q;try{q=fn(t.objectStore('clips'))}catch(e){reject(e);return}t.oncomplete=()=>resolve(q&&q.result);t.onerror=()=>reject(t.error)})}
+let outageRecorder=null,outageStarted=0,outageCaptureBound=false,outageSequence=0,outageWanted=false,outageTimer=null;
+const offlineAckWaiters=new Map(),offlineSending=new WeakSet();
+async function storeOfflineClip(blob,t0,t1){if(!blob||blob.size<1500)return;const id=(localStorage.cc||'camera')+'-'+Date.now()+'-'+(++outageSequence);try{await offlineOp('readwrite',s=>s.add({id,blob,type:blob.type,t0:t0||Date.now(),t1:t1||Date.now(),camera:localStorage.cc||'',name:tgName()||'Camera'}));const all=(await offlineOp('readonly',s=>s.getAll()))||[];let total=all.reduce((n,x)=>n+(x.blob?.size||0),0);all.sort((a,b)=>a.t0-b.t0);while((all.length>24||total>45*1024*1024)&&all.length){const old=all.shift();total-=old.blob?.size||0;await offlineOp('readwrite',s=>s.delete(old.id))}}catch(e){$('cerr').textContent='Offline clip storage: '+(e.message||e)}}
+function startOfflineSegment(){if(!outageWanted||navigator.onLine!==false||!dashCfg.offline||!vs||!window.MediaRecorder)return;if(outageRecorder&&outageRecorder.state==='recording')return;try{const tracks=vs.getVideoTracks().slice();if(as)tracks.push(...as.getAudioTracks());const stream=new MediaStream(tracks);let opts={};for(const m of ['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4'])if(MediaRecorder.isTypeSupported(m)){opts.mimeType=m;break}const rec=new MediaRecorder(stream,Object.assign({videoBitsPerSecond:450000,audioBitsPerSecond:48000},opts)),chunks=[],t0=Date.now();outageRecorder=rec;rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};rec.onerror=e=>{$('cerr').textContent='Offline recording error: '+(e.error?.message||'MediaRecorder error')};rec.onstop=async()=>{const t1=Date.now();const mime=rec.mimeType||(chunks[0]&&chunks[0].type)||'video/webm';const blob=new Blob(chunks,{type:mime});await storeOfflineClip(blob,t0,t1);if(outageRecorder===rec)outageRecorder=null;if(outageWanted&&navigator.onLine===false)setTimeout(startOfflineSegment,250)};rec.start(1000);clearTimeout(outageTimer);outageTimer=setTimeout(()=>{if(rec.state==='recording')try{rec.stop()}catch(e){}},8000);$('cst').textContent='📴 Internet lost · saving local clips'}catch(e){$('cerr').textContent='Offline recording unavailable: '+(e.message||e)}}
+function beginOutageRecording(){if(!dashCfg.offline||!vs||!window.MediaRecorder)return;outageWanted=true;outageStarted=outageStarted||Date.now();startOfflineSegment()}
+function endOutageRecording(){outageWanted=false;clearTimeout(outageTimer);outageTimer=null;const rec=outageRecorder;if(rec&&rec.state==='recording'){try{rec.stop()}catch(e){}}}
+async function base64Chunk(ab){const u=new Uint8Array(ab);let b='';for(let i=0;i<u.length;i+=8192)b+=String.fromCharCode(...u.subarray(i,i+8192));return btoa(b)}
+async function transmitOfflineClips(target){if(!target||!target.open||offlineSending.has(target))return;offlineSending.add(target);try{let all=[];try{all=await offlineOp('readonly',s=>s.getAll())||[]}catch(e){return}all.sort((a,b)=>a.t0-b.t0);const batch=all.slice(0,8);if(!batch.length){target.send({type:'offline_empty'});return}for(const clip of batch){if(!target.open)break;try{const ab=await clip.blob.arrayBuffer(),size=8192,total=Math.ceil(ab.byteLength/size);target.send({type:'offline_begin',id:clip.id,name:clip.name||tgName()||'Camera',t0:clip.t0,t1:clip.t1,mime:clip.type||clip.blob.type||'video/webm',total,bytes:ab.byteLength});for(let i=0;i<total;i++){if(!target.open)break;const part=ab.slice(i*size,Math.min(ab.byteLength,(i+1)*size));target.send({type:'offline_part',id:clip.id,index:i,data:await base64Chunk(part)});await sleep(35)}if(!target.open)break;const acked=new Promise(resolve=>{const timer=setTimeout(()=>{offlineAckWaiters.delete(clip.id);resolve(false)},20000);offlineAckWaiters.set(clip.id,{resolve,timer})});target.send({type:'offline_end',id:clip.id});if(!await acked)break}catch(e){$('cerr').textContent='Offline recovery transfer: '+(e.message||e);break}}if(target.open){const left=(await offlineOp('readonly',s=>s.getAll()))||[];target.send({type:'offline_batch_done',remaining:left.length})}}finally{offlineSending.delete(target)}}
+async function deleteOfflineClip(id){if(!id)return;try{await offlineOp('readwrite',s=>s.delete(id))}catch(e){}}
+function setupOfflineLifecycle(){if(outageCaptureBound)return;outageCaptureBound=true;addEventListener('offline',()=>{outageStarted=Date.now();localStorage.cctvOfflineStart=String(outageStarted);beginOutageRecording();});addEventListener('online',()=>{const at=+(localStorage.cctvOfflineStart||0),duration=at?Date.now()-at:0;endOutageRecording();outageStarted=0;localStorage.removeItem('cctvOfflineStart');setTimeout(()=>{conns.forEach(c=>{if(c.open){c.send({type:'camera_network',state:'online',duration,t:Date.now()});transmitOfflineClips(c)}})},3500)});if(navigator.onLine===false){outageStarted=+(localStorage.cctvOfflineStart||0)||Date.now();localStorage.cctvOfflineStart=String(outageStarted);beginOutageRecording()}}
 
 /* ================= CAMERA ================= */
 const RES={SD:[640,360,6e5],HD:[1280,720,1.5e6],FHD:[1920,1080,3e6]};
@@ -227,16 +251,18 @@ async function openVideo(){
 }
 const caps=()=>{const t=vs&&vs.getVideoTracks()[0];return t&&t.getCapabilities?t.getCapabilities():{}};
 async function sendStatus(){
-  let b=null;try{b=Math.round((await navigator.getBattery()).level*100)}catch(e){}
-  const c=caps(),m={type:'st',ver:VER,t:Date.now(),bat:b,res,fc:facing,err:camErr,au:!!ac&&ac.state=='running',torch:!!c.torch,zoom:c.zoom?[c.zoom.min,c.zoom.max]:null};
+  let b=null,charging=null;try{const battery=await navigator.getBattery();b=Math.round(battery.level*100);charging=!!battery.charging}catch(e){}
+  const c=caps(),m={type:'st',ver:VER,t:Date.now(),bat:b,charging,res,fc:facing,err:camErr,au:!!ac&&ac.state=='running',torch:!!c.torch,zoom:c.zoom?[c.zoom.min,c.zoom.max]:null};
   conns.forEach(x=>x.open&&x.send(m));$('cerr').textContent=camErr?'⚠ '+camErr+' ('+facing+')':'';$('cbat').textContent=b==null?'':'🔋'+b+'%';
 }
-async function cmd(d){
+async function cmd(d,source){
+  if(d&&d.c==='dashcfg'){dashCfg=Object.assign({},dashCfg,d.v||{});localStorage.dashCfg=JSON.stringify(dashCfg);if(dashCfg.people)peopleStatus='Loading AI model…';return}
+  if(d&&d.c==='offline_pull'){if(source)await transmitOfflineClips(source);return}
+  if(d&&d.c==='offline_ack'){await deleteOfflineClip(d.v);const w=offlineAckWaiters.get(d.v);if(w){clearTimeout(w.timer);offlineAckWaiters.delete(d.v);w.resolve(true)}return}
   const t=vs&&vs.getVideoTracks()[0],ap=a=>t&&t.applyConstraints({advanced:[a]}).catch(()=>{});
   try{
   if(d.c=='mo')moLvl=d.v;
   else if(d.c=='tr')trk=d.v;
-  else if(d.c=='dashcfg'){dashCfg={on:!!(d.v&&d.v.on),level:Math.max(1,Math.min(3,+(d.v&&d.v.level)||1)),snd:!!(d.v&&d.v.snd)};localStorage.dashCfg=JSON.stringify(dashCfg);}
   else if(d.c=='blk')blk(d.v);
   else if(d.c=='siren')siren();
   else if(d.c=='q'){res=d.v;await openVideo()}
@@ -262,7 +288,8 @@ async function startCamera(){
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){wk();watch()}});
   window.addEventListener('online',()=>setTimeout(watch,1000));
   setInterval(watch,8000);
-  tgLife();
+  tgLife();setupOfflineLifecycle();
+  if(navigator.onLine===false)beginOutageRecording();
 }
 /* Telegram life-cycle alerts (camera phone) */
 async function tgLife(){
@@ -270,8 +297,8 @@ async function tgLife(){
   localStorage.hb=Date.now();setInterval(()=>{localStorage.hb=Date.now()},15000);
   /* announce only a real restart / outage — a quick page reload stays silent */
   if(!last||gap>120000)tgSend(tgMsg('🟢 <b>Camera online</b>',last?'⏱ Was offline for <b>'+fmtD(gap)+'</b> (since '+new Date(last).toLocaleTimeString('sv-SE')+')':'Alerts are active.'));
-  let offAt=0;addEventListener('offline',()=>{offAt=Date.now()});
-  addEventListener('online',()=>{if(offAt){const d=Date.now()-offAt;offAt=0;if(d>60000)setTimeout(()=>tgSend(tgMsg('🌐 <b>Internet is back</b>','⏱ Was down for <b>'+fmtD(d)+'</b>')),1500)}});
+  let offAt=+(localStorage.cctvNetDown||0);if(offAt&&navigator.onLine){const d=Date.now()-offAt;offAt=0;localStorage.removeItem('cctvNetDown');setTimeout(()=>tgSend(tgMsg('🌐 <b>Camera internet restored</b>','⏱ Connection was unavailable for <b>'+fmtD(d)+'</b>','📡 Network: online')),1800)}addEventListener('offline',()=>{offAt=Date.now();localStorage.cctvNetDown=String(offAt);conns.forEach(c=>c.open&&c.send({type:'camera_network',state:'offline',t:offAt}));});
+  addEventListener('online',()=>{if(offAt){const d=Date.now()-offAt;offAt=0;localStorage.removeItem('cctvNetDown');setTimeout(()=>tgSend(tgMsg('🌐 <b>Camera internet restored</b>','⏱ Connection was unavailable for <b>'+fmtD(d)+'</b>','📡 Network: online')),1500)}});
   try{const b=await navigator.getBattery();let low=0,crit=0,ct=0;
     const chk=()=>{const p=Math.round(b.level*100);
       if(!b.charging&&p<=20&&!low){low=1;tgSend(tgMsg('🪫 <b>Battery low</b> — '+p+'%'))}
@@ -304,7 +331,7 @@ function makePeer(){
   });
   me.on('connection',cn=>{
     if((cn.metadata||{}).pin!=pin)return cn.close();
-    cn.on('open',()=>{conns.push(cn);sendStatus()});cn.on('data',cmd);cn.on('close',()=>conns=conns.filter(x=>x!=cn));cn.on('error',()=>conns=conns.filter(x=>x!=cn));
+    cn.on('open',()=>{conns.push(cn);sendStatus()});cn.on('data',d=>cmd(d,cn));cn.on('close',()=>conns=conns.filter(x=>x!=cn));cn.on('error',()=>conns=conns.filter(x=>x!=cn));
   });
 }
 let badSince=0,lastAu=0;
@@ -374,9 +401,9 @@ setInterval(()=>{
   if(!want||!peerM)return;
   const raw=localStorage.mc,live=$('rv').srcObject;
   if(!live){if(!lostAt)lostAt=Date.now();
-    if(!offSent&&tgOn()&&Date.now()-lostAt>120000){offSent=1;tgSend(tgMsg('🔴 <b>Camera unreachable</b>','No connection for 2 minutes.','The camera phone may be off, offline, or its page was closed.'))}
+    if(!offSent&&tgOn()&&Date.now()-lostAt>120000){offSent=1;tgSend(tgMsg('🔴 <b>Camera unreachable</b>','📡 No video connection for 2 minutes.','🕐 Since: '+new Date(lostAt).toLocaleString(),'⚠️ The camera may be powered off, offline, or its page may have been closed.'))}
     if(!toT&&Date.now()-startedAt>16000)lost();return}
-  lostAt=0;if(offSent){offSent=0;tgSend(tgMsg('🟢 <b>Camera reachable again</b>'))}
+  if(lostAt){const downtime=Date.now()-lostAt;if(offSent||downtime>15000)tgSend(tgMsg('🟢 <b>Camera connection restored</b>','⏱ Interruption: <b>'+fmtDur(downtime)+'</b>','🕐 Restored: '+new Date().toLocaleString()));lostAt=0;offSent=0}
   const pcs=call&&call.peerConnection&&call.peerConnection.iceConnectionState;
   if(pcs=='failed'||pcs=='closed'){lost();return}
   if(Date.now()-lastSt>10000&&peerM.open){lastSt=Date.now();st('Reconnecting controls…');openDC(PRE+raw.slice(0,6),{pin:raw.slice(6)},peerM)}
@@ -459,20 +486,26 @@ async function gal(){
 
 /* ===== extras ===== */
 let moLvl=0,trk=0,pm=null,lastMo=0,lastTg=0,ev=null,win=[],vSince=0,tgLog=[],tgCapNote=0,an,ac,taps=[];
-let dashCfg=(()=>{try{return Object.assign({on:false,level:1,snd:false},JSON.parse(localStorage.dashCfg||'{}'))}catch(e){return{on:false,level:1,snd:false}}})();
+let dashCfg=(()=>{try{return Object.assign({on:false,level:1,snd:false,people:false,peopleNotify:true,offline:true},JSON.parse(localStorage.dashCfg||'{}'))}catch(e){return{on:false,level:1,snd:false,people:false,peopleNotify:true,offline:true}}})();
 let dashWin=[],dashEv=null,dashLast=0;
 const MOT=[0,.08,.03,.012],MOT_TG=[0,.06,.03,.02];
 function blk(on){$('dim').style.display=on?'block':'none';if(on)try{document.documentElement.requestFullscreen()}catch(e){}}
 function tap3(){const n=Date.now();taps=taps.filter(t=>n-t<900);taps.push(n);if(taps.length>=3){taps=[];blk(false)}}
+/* ===== v12 on-device people count (COCO-SSD / TensorFlow.js) ===== */
+let peopleModel=null,peopleLoading=null,peopleBusy=false,peopleLastRun=0,peopleCount=-1,peopleCandidate=-1,peopleCandidateN=0,peopleLastSent=0,peopleStatus='Off';
+function injectScript(src){return new Promise((resolve,reject)=>{const el=document.createElement('script');el.src=src;el.async=true;el.onload=resolve;el.onerror=()=>reject(new Error('Could not load '+src));document.head.appendChild(el)})}
+async function loadPeopleModel(){if(peopleModel)return peopleModel;if(peopleLoading)return peopleLoading;peopleStatus='Loading model…';peopleLoading=(async()=>{if(!window.tf)await injectScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');if(!window.cocoSsd)await injectScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js');await tf.ready();peopleModel=await cocoSsd.load({base:'lite_mobilenet_v2'});peopleStatus='AI ready';return peopleModel})().catch(e=>{peopleStatus='AI unavailable: '+e.message;peopleLoading=null;throw e});return peopleLoading}
+async function peopleStep(video,now){if(!dashCfg.people||peopleBusy||now-peopleLastRun<2600||!video.videoWidth)return;peopleLastRun=now;peopleBusy=true;try{const model=await loadPeopleModel();const pred=await model.detect(video,12,.42);const count=pred.filter(p=>p.class==='person'&&p.score>=.42).length;if(count===peopleCandidate)peopleCandidateN++;else{peopleCandidate=count;peopleCandidateN=1}if(peopleCandidateN>=2){const changed=count!==peopleCount;peopleCount=count;if(changed||now-peopleLastSent>12000){peopleLastSent=now;const msg={type:'occupancy',count,t:now,status:peopleStatus};conns.forEach(k=>k.open&&k.send(msg))}}}catch(e){if(now-peopleLastSent>30000){peopleLastSent=now;conns.forEach(k=>k.open&&k.send({type:'occupancy',count:null,t:now,status:peopleStatus,error:e.message}))}}finally{peopleBusy=false}}
+
 function detect(){
   const c=document.createElement('canvas');c.width=64;c.height=36;const x=c.getContext('2d',{willReadFrequently:true}),buf=new Uint8Array(512);
   try{ac=new(window.AudioContext||window.webkitAudioContext)();an=ac.createAnalyser();an.fftSize=512;if(as)ac.createMediaStreamSource(as).connect(an)}catch(e){}
   setInterval(()=>{$('au').style.display=ac&&ac.state=='running'?'none':'block'},1000);
   document.addEventListener('pointerdown',()=>{ac&&ac.resume();$('ta').play().catch(()=>{})});
   setInterval(()=>{
-    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length,trkA=trk&&conns.length,dashA=dashCfg.on&&conns.length,now=Date.now();
+    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length,trkA=trk&&conns.length,dashA=dashCfg.on&&conns.length,peopleA=dashCfg.people&&conns.length,now=Date.now();
     if(ev&&now-ev.last>45000){tgEndEvent(ev);ev=null}      /* event over: quiet for 45 s */
-    if(!tgA&&!monA&&!trkA&&!dashA)return;const v=$('pv');if(!v.videoWidth)return;
+    if(!tgA&&!monA&&!trkA&&!dashA&&!peopleA)return;const v=$('pv');if(!v.videoWidth)return;if(peopleA)peopleStep(v,now).catch(()=>{});
     x.drawImage(v,0,0,64,36);const d=x.getImageData(0,0,64,36).data,gr=new Uint8Array(2304);let n=0,sx=0,sy=0;
     for(let i=0;i<2304;i++){gr[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(pm&&Math.abs(gr[i]-pm[i])>32){n++;sx+=i%64;sy+=(i/64|0)}}
     const frac=n/2304,still=!pm||now-vSince<5000||frac>.5;   /* camera warm-up, or a lighting jump (not real motion) */
