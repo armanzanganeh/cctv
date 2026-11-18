@@ -42,7 +42,8 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 
 <div id="cam" class="pg"><header><span class="t">Camera</span><span id="cbat" style="font-size:16px"></span></header><div class="box">
 <div>Camera code:</div><div id="ccode" style="font-size:30px;letter-spacing:3px;background:#f3f3f3;border-radius:12px;padding:12px;margin:8px 0">------</div>
-<div id="cst" style="color:#8b93a3;margin:8px 0">...</div><div id="au" style="display:none;background:#e11d48;color:#fff;padding:12px;border-radius:14px;margin:8px 0;font-weight:700">🔈 Tap anywhere once to enable siren &amp; talk</div>
+<div id="cst" style="color:#8b93a3;margin:8px 0">...</div><div id="cerr" style="color:#ff6b6b;font-size:13px;margin:4px 0;word-break:break-word"></div>
+<button class="btn g" onclick="if(!vBusy){facing=facing=='environment'?'user':'environment';openVideo().catch(e=>{camErr=e.name+': '+e.message;$('cerr').textContent=camErr})}">🔄 Switch camera (test here)</button><div id="au" style="display:none;background:#e11d48;color:#fff;padding:12px;border-radius:14px;margin:8px 0;font-weight:700">🔈 Tap anywhere once to enable siren &amp; talk</div>
 <video id="pv" class="pv" autoplay playsinline muted></video><audio id="ta" autoplay playsinline></audio>
 <button class="btn g" onclick="blk(true)">🌑 Black screen (triple-tap to wake)</button>
 <button class="btn g" onclick="localStorage.removeItem('cc');localStorage.removeItem('role');location.reload()">🔑 New code</button><button class="btn g" onclick="localStorage.removeItem('role');location.reload()">↩ Change mode</button></div>
@@ -139,7 +140,7 @@ const caps=()=>{const t=vs&&vs.getVideoTracks()[0];return t&&t.getCapabilities?t
 async function sendStatus(){
   let b=null;try{b=Math.round((await navigator.getBattery()).level*100)}catch(e){}
   const c=caps(),m={type:'st',ver:VER,t:Date.now(),bat:b,res,fc:facing,err:camErr,au:!!ac&&ac.state=='running',torch:!!c.torch,zoom:c.zoom?[c.zoom.min,c.zoom.max]:null};
-  conns.forEach(x=>x.open&&x.send(m));$('cbat').textContent=b==null?'':'🔋'+b+'%';
+  conns.forEach(x=>x.open&&x.send(m));$('cerr').textContent=camErr?'⚠ '+camErr+' ('+facing+')':'';$('cbat').textContent=b==null?'':'🔋'+b+'%';
 }
 async function cmd(d){
   const t=vs&&vs.getVideoTracks()[0],ap=a=>t&&t.applyConstraints({advanced:[a]}).catch(()=>{});
