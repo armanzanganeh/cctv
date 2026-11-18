@@ -36,13 +36,13 @@ input.tx:focus{border-color:var(--ac)}
 video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV</span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v4</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
 <button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button></div></div>
 
 <div id="cam" class="pg"><header><span class="t">Camera</span><span id="cbat" style="font-size:16px"></span></header><div class="box">
 <div>Camera code:</div><div id="ccode" style="font-size:30px;letter-spacing:3px;background:#f3f3f3;border-radius:12px;padding:12px;margin:8px 0">------</div>
-<div id="cst" style="color:#666;margin:8px 0">...</div>
+<div id="cst" style="color:#8b93a3;margin:8px 0">...</div><div id="au" style="display:none;background:#e11d48;color:#fff;padding:12px;border-radius:14px;margin:8px 0;font-weight:700">🔈 Tap anywhere once to enable siren &amp; talk</div>
 <video id="pv" class="pv" autoplay playsinline muted></video><audio id="ta" autoplay playsinline></audio>
 <button class="btn g" onclick="blk(true)">🌑 Black screen (triple-tap to wake)</button>
 <button class="btn g" onclick="localStorage.removeItem('cc');localStorage.removeItem('role');location.reload()">🔑 New code</button><button class="btn g" onclick="localStorage.removeItem('role');location.reload()">↩ Change mode</button></div>
@@ -66,7 +66,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 <div class="it" id="bNv" onclick="nvt()"><i>🌙</i>Night Vision</div>
 <div class="it" onclick="send({c:'sw'})"><i>🔄</i>Switch</div>
 <div class="it" id="bFl" onclick="flt()"><i>⚡</i>Flash</div>
-<div class="it" onclick="$('colp').style.display=$('colp').style.display=='block'?'none':'block'"><i>🎨</i>Color</div><div class="it" id="bMo" onclick="mot()"><i>👁</i>Motion: Off</div><div class="it" id="bBk" onclick="stl()"><i>🕶</i>Stealth</div><div class="it" onclick="send({c:'siren'});toast('Siren on camera')"><i>🚨</i>Siren</div></div>
+<div class="it" onclick="$('colp').style.display=$('colp').style.display=='block'?'none':'block'"><i>🎨</i>Color</div><div class="it" id="bMo" onclick="mot()"><i>👁</i>Motion: Off</div><div class="it" id="bBk" onclick="stl()"><i>🕶</i>Stealth</div><div class="it" onclick="send({c:'siren'});toast(camAu===false?'Camera sound is locked: tap its screen once':'Siren on camera')"><i>🚨</i>Siren</div></div>
 <div id="colp"><label>Brightness<input type="range" id="cb" min="0.4" max="2.5" step="0.05" value="1"></label>
 <label>Contrast<input type="range" id="cc" min="0.4" max="2.5" step="0.05" value="1"></label>
 <label>Saturation<input type="range" id="cs" min="0" max="3" step="0.05" value="1"></label>
@@ -77,7 +77,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const $=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v4',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
@@ -100,7 +100,7 @@ async function openVideo(){
 const caps=()=>{const t=vs&&vs.getVideoTracks()[0];return t&&t.getCapabilities?t.getCapabilities():{}};
 async function sendStatus(){
   let b=null;try{b=Math.round((await navigator.getBattery()).level*100)}catch(e){}
-  const c=caps(),m={type:'st',t:Date.now(),bat:b,res,torch:!!c.torch,zoom:c.zoom?[c.zoom.min,c.zoom.max]:null};
+  const c=caps(),m={type:'st',ver:VER,t:Date.now(),bat:b,res,au:!!ac&&ac.state=='running',torch:!!c.torch,zoom:c.zoom?[c.zoom.min,c.zoom.max]:null};
   conns.forEach(x=>x.open&&x.send(m));$('cbat').textContent=b==null?'':'🔋'+b+'%';
 }
 async function cmd(d){
@@ -136,7 +136,7 @@ async function startCamera(){
     if((cn.metadata||{}).pin!=pin)return cn.close();
     cn.on('open',()=>{conns.push(cn);sendStatus()});cn.on('data',cmd);cn.on('close',()=>conns=conns.filter(x=>x!=cn));
   });
-  setInterval(sendStatus,3000);detect();setTimeout(()=>blk(true),10000);
+  setInterval(sendStatus,3000);detect();setTimeout(function f(){ac&&ac.state=='running'?blk(true):setTimeout(f,3000)},10000);
   const wk=async()=>{try{wl=await navigator.wakeLock.request('screen')}catch(e){}};wk();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)wk()});
 }
@@ -164,14 +164,14 @@ function start(raw){
     call.on('close',lost);call.on('error',lost);
     const pc=call.peerConnection;
     pc.oniceconnectionstatechange=()=>{const s=pc.iceConnectionState;if(s=='failed'||s=='closed')lost();if(s=='disconnected')setTimeout(()=>{const x=pc.iceConnectionState;if(x!='connected'&&x!='completed')lost()},6000)};
-    setTimeout(()=>{if(!$('rv').srcObject)lost()},12000);
+    setTimeout(()=>{if(!$('rv').srcObject)lost()},12000);stSeen=0;setTimeout(()=>{if(!stSeen&&$('rv').srcObject)toast('Controls not connected: reload the camera page')},9000);
   });
   peerM.on('error',e=>{st('Error: '+e.type);lost()});
 }
 function lost(){if(!want)return;st('Reconnecting…');$('rv').srcObject=null;clearTimeout(toT);toT=setTimeout(()=>start(localStorage.mc),3000)}
 function back(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;show('home')}
 function chg(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;st('');$('cp').style.display='block'}
-function onSt(d){if(d.type=='mo')return alarm(d);if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
+function onSt(d){if(d.type=='mo')return alarm(d);if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;camAu=d.au;stSeen=1;if(d.ver!=VER)st('⚠ Camera phone has an old version: reload its page');q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
 setInterval(()=>$('ts').textContent=new Date(Date.now()+off).toLocaleString('sv-SE'),1000);
 const ui=()=>{$('mi').textContent=muted?'🔇':'🔊';$('bMute').classList.toggle('on',muted)};
 function unm(){muted=false;$('rv').muted=false;$('rv').play();$('snd').style.display='none';ui()}
@@ -239,6 +239,7 @@ function tap3(){const n=Date.now();taps=taps.filter(t=>n-t<900);taps.push(n);if(
 function detect(){
   const c=document.createElement('canvas');c.width=64;c.height=36;const x=c.getContext('2d',{willReadFrequently:true}),buf=new Uint8Array(512);
   try{ac=new(window.AudioContext||window.webkitAudioContext)();an=ac.createAnalyser();an.fftSize=512;if(as)ac.createMediaStreamSource(as).connect(an)}catch(e){}
+  setInterval(()=>{$('au').style.display=ac&&ac.state=='running'?'none':'block'},1000);
   document.addEventListener('pointerdown',()=>{ac&&ac.resume();$('ta').play().catch(()=>{})});
   setInterval(()=>{
     if(!moLvl||!conns.length)return;const v=$('pv');if(!v.videoWidth)return;
@@ -250,8 +251,8 @@ function detect(){
       const m={type:'mo',why:hit?'motion':'sound',img:s.toDataURL('image/jpeg',.6),t:Date.now()};conns.forEach(k=>k.open&&k.send(m))}
   },500);
 }
-function siren(){try{ac.resume();const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.connect(g);g.connect(ac.destination);g.gain.value=.6;o.start();const t=ac.currentTime;for(let i=0;i<20;i++)o.frequency.setValueAtTime(i%2?900:1500,t+i*.25);o.stop(t+5)}catch(e){}}
-let mo=0,alarmT,blkOn=false;
+async function siren(){try{await ac.resume();const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.connect(g);g.connect(ac.destination);g.gain.value=.6;o.start();const t=ac.currentTime;for(let i=0;i<20;i++)o.frequency.setValueAtTime(i%2?900:1500,t+i*.25);o.stop(t+5)}catch(e){}}
+let mo=0,alarmT,blkOn=false,camAu,stSeen=0;
 function alarm(d){
   $('al').textContent=(d.why=='sound'?'🔊 Sound detected':'🚨 Motion detected')+' · '+new Date(d.t).toLocaleTimeString('sv-SE');$('al').style.display='block';
   clearTimeout(alarmT);alarmT=setTimeout(()=>$('al').style.display='none',8000);
