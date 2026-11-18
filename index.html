@@ -86,7 +86,7 @@ const rnd=n=>String(Math.floor(Math.random()*10**n)).padStart(n,'0');
 
 /* ================= CAMERA ================= */
 const RES={SD:[640,360,6e5],HD:[1280,720,1.5e6],FHD:[1920,1080,3e6]};
-let vs,as,cstream,facing='environment',res='HD',peerC,calls=[],conns=[],pin,wl;
+let vs,as,cstream=new MediaStream(),facing='environment',res='HD',peerC,calls=[],conns=[],pin,wl;
 function applyBr(c){setTimeout(()=>{try{c.peerConnection.getSenders().forEach(async s=>{if(s.track&&s.track.kind=='video')try{const p=s.getParameters();if(!p.encodings||!p.encodings.length)p.encodings=[{}];p.encodings[0].maxBitrate=RES[res][2];await s.setParameters(p)}catch(e){}})}catch(e){}},1500)}
 let vBusy=false,camErr='';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -101,6 +101,7 @@ async function grab(want){
     const dev=(await md.enumerateDevices()).filter(d=>d.kind=='videoinput'&&re.test(d.label));
     dev.forEach(d=>list.push({video:{deviceId:{exact:d.deviceId},width:{ideal:w},height:{ideal:h}}}));
   }catch(e){}
+  list.push({video:true});   /* last resort: any camera is better than none */
   let err;
   for(const c of list){
     for(let k=0;k<3;k++){
@@ -132,7 +133,10 @@ async function openVideo(){
     $('pv').srcObject=vs;
     const vt=vs.getVideoTracks()[0];
     cstream=new MediaStream([vt,...(as?as.getAudioTracks():[])]);
-    calls.forEach(c=>{c.peerConnection.getSenders().forEach(s=>{if(s.track&&s.track.kind=='video')s.replaceTrack(vt)});applyBr(c)});
+    const fm=vt.getSettings().facingMode;if(fm)facing=fm;
+    calls.slice().forEach(c=>{const ss=c.peerConnection.getSenders();
+      if(!ss.some(s=>s.track&&s.track.kind=='video'))return c.close();   /* call started without video → monitor reconnects */
+      ss.forEach(s=>{if(s.track&&s.track.kind=='video')s.replaceTrack(vt)});applyBr(c)});
   }finally{vBusy=false}
   sendStatus();
 }
@@ -161,8 +165,8 @@ async function startCamera(){
   let c=localStorage.cc;if(!c||c.length!=12){c=rnd(6)+rnd(6);localStorage.cc=c}
   pin=c.slice(6);$('ccode').textContent=c.slice(0,6)+'-'+pin;
   try{as=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){toast('No microphone: video only')}
-  try{await openVideo()}catch(e){$('cst').textContent='Camera error: '+e.message;return}
-  makePeer();
+  try{await openVideo()}catch(e){camErr=(e.name||'error')+': '+(e.message||'');$('cerr').textContent='⚠ '+camErr+' — retrying…'}
+  makePeer();   /* start anyway: the watchdog keeps retrying the camera */
   setInterval(sendStatus,3000);detect();setTimeout(function f(){ac&&ac.state=='running'?blk(true):setTimeout(f,3000)},10000);
   const wk=async()=>{try{if(!wl||wl.released)wl=await navigator.wakeLock.request('screen')}catch(e){}};wk();setInterval(wk,20000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){wk();watch()}});
