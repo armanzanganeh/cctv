@@ -36,7 +36,7 @@ input.tx:focus{border-color:var(--ac)}
 video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v5</small></span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v6</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
 <button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button></div></div>
 
@@ -77,7 +77,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const VER='v5',$=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v6',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
@@ -87,32 +87,65 @@ const rnd=n=>String(Math.floor(Math.random()*10**n)).padStart(n,'0');
 const RES={SD:[640,360,6e5],HD:[1280,720,1.5e6],FHD:[1920,1080,3e6]};
 let vs,as,cstream,facing='environment',res='HD',peerC,calls=[],conns=[],pin,wl;
 function applyBr(c){setTimeout(()=>{try{c.peerConnection.getSenders().forEach(async s=>{if(s.track&&s.track.kind=='video')try{const p=s.getParameters();if(!p.encodings||!p.encodings.length)p.encodings=[{}];p.encodings[0].maxBitrate=RES[res][2];await s.setParameters(p)}catch(e){}})}catch(e){}},1500)}
+let vBusy=false,camErr='';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+/* try several ways to open the wanted camera (iOS Safari is picky) */
+async function grab(want){
+  const [w,h]=RES[res],md=navigator.mediaDevices,list=[
+    {video:{facingMode:{exact:want},width:{ideal:w},height:{ideal:h}}},
+    {video:{facingMode:{ideal:want}}},
+    {video:{facingMode:want}}];
+  try{ /* by device id (labels are known once permission was granted) */
+    const re=want=='user'?/front|user|selfie/i:/back|rear|environment/i;
+    const dev=(await md.enumerateDevices()).filter(d=>d.kind=='videoinput'&&re.test(d.label));
+    dev.forEach(d=>list.push({video:{deviceId:{exact:d.deviceId},width:{ideal:w},height:{ideal:h}}}));
+  }catch(e){}
+  let err;
+  for(const c of list){
+    try{const s=await md.getUserMedia(c),f=s.getVideoTracks()[0].getSettings().facingMode;
+      if(f&&f!=want){s.getTracks().forEach(t=>t.stop());err=new Error('wrong camera');continue}
+      return s}
+    catch(e){err=e;await sleep(250)}
+  }
+  throw err||new Error('no camera');
+}
 async function openVideo(){
-  vs&&vs.getTracks().forEach(t=>t.stop());
-  const [w,h]=RES[res];
-  vs=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:w},height:{ideal:h},frameRate:{ideal:30}}});
-  $('pv').srcObject=vs;
-  const vt=vs.getVideoTracks()[0];
-  cstream=new MediaStream([vt,...(as?as.getAudioTracks():[])]);
-  calls.forEach(c=>{c.peerConnection.getSenders().forEach(s=>{if(s.track&&s.track.kind=='video')s.replaceTrack(vt)});applyBr(c)});
+  if(vBusy)return;vBusy=true;
+  const prev=facing;
+  try{
+    vs&&vs.getTracks().forEach(t=>t.stop());   /* iOS can't open two cameras at once */
+    await sleep(150);
+    try{vs=await grab(facing);camErr=''}
+    catch(e){
+      if(facing!=prev)facing=prev;   /* switch failed → go back to the working camera */
+      camErr=(e&&e.name||'error')+': '+(e&&e.message||'');
+      vs=await grab(facing);
+    }
+    $('pv').srcObject=vs;
+    const vt=vs.getVideoTracks()[0];
+    cstream=new MediaStream([vt,...(as?as.getAudioTracks():[])]);
+    calls.forEach(c=>{c.peerConnection.getSenders().forEach(s=>{if(s.track&&s.track.kind=='video')s.replaceTrack(vt)});applyBr(c)});
+  }finally{vBusy=false}
   sendStatus();
 }
 const caps=()=>{const t=vs&&vs.getVideoTracks()[0];return t&&t.getCapabilities?t.getCapabilities():{}};
 async function sendStatus(){
   let b=null;try{b=Math.round((await navigator.getBattery()).level*100)}catch(e){}
-  const c=caps(),m={type:'st',ver:VER,t:Date.now(),bat:b,res,au:!!ac&&ac.state=='running',torch:!!c.torch,zoom:c.zoom?[c.zoom.min,c.zoom.max]:null};
+  const c=caps(),m={type:'st',ver:VER,t:Date.now(),bat:b,res,fc:facing,err:camErr,au:!!ac&&ac.state=='running',torch:!!c.torch,zoom:c.zoom?[c.zoom.min,c.zoom.max]:null};
   conns.forEach(x=>x.open&&x.send(m));$('cbat').textContent=b==null?'':'🔋'+b+'%';
 }
 async function cmd(d){
-  const t=vs.getVideoTracks()[0],ap=a=>t.applyConstraints({advanced:[a]}).catch(()=>{});
+  const t=vs&&vs.getVideoTracks()[0],ap=a=>t&&t.applyConstraints({advanced:[a]}).catch(()=>{});
+  try{
   if(d.c=='mo')moLvl=d.v;
   else if(d.c=='blk')blk(d.v);
   else if(d.c=='siren')siren();
   else if(d.c=='q'){res=d.v;await openVideo()}
-  else if(d.c=='sw'){facing=facing=='environment'?'user':'environment';await openVideo()}
+  else if(d.c=='sw'){if(vBusy)return;facing=facing=='environment'?'user':'environment';await openVideo()}
   else if(d.c=='fl')ap({torch:d.v});
   else if(d.c=='zm')ap({zoom:d.v});
   else if(d.c=='nv'){const c=caps();ap({exposureCompensation:d.v&&c.exposureCompensation?c.exposureCompensation.max:0})}
+  }catch(e){camErr=(e&&e.name||'error')+': '+(e&&e.message||'')}
   sendStatus();
 }
 async function startCamera(){
@@ -152,7 +185,7 @@ function makePeer(){
     cn.on('open',()=>{conns.push(cn);sendStatus()});cn.on('data',cmd);cn.on('close',()=>conns=conns.filter(x=>x!=cn));cn.on('error',()=>conns=conns.filter(x=>x!=cn));
   });
 }
-let badSince=0;
+let badSince=0,lastAu=0;
 async function watch(){
   /* drop dead calls/conns */
   calls=calls.filter(c=>{const s=c.peerConnection&&c.peerConnection.iceConnectionState;return s&&s!='closed'&&s!='failed'});
@@ -160,8 +193,12 @@ async function watch(){
   camStatus();
   /* camera/mic track died (phone slept, other app took camera) → reopen */
   const t=vs&&vs.getVideoTracks()[0];
-  if(!t||t.readyState=='ended'){try{await openVideo()}catch(e){}}
-  if(as&&as.getAudioTracks()[0]&&as.getAudioTracks()[0].readyState=='ended'){try{as=await navigator.mediaDevices.getUserMedia({audio:true});await openVideo()}catch(e){}}
+  if(!vBusy&&(!t||t.readyState=='ended')){try{await openVideo()}catch(e){}}
+  const at=as&&as.getAudioTracks()[0];
+  if(!vBusy&&at&&at.readyState=='ended'&&Date.now()-lastAu>60000){lastAu=Date.now();
+    try{as=await navigator.mediaDevices.getUserMedia({audio:true});const nt=as.getAudioTracks()[0];
+      cstream=new MediaStream([...(vs?vs.getVideoTracks():[]),nt]);
+      calls.forEach(c=>c.peerConnection.getSenders().forEach(s=>{if(s.track&&s.track.kind=='audio')s.replaceTrack(nt)}))}catch(e){}}
   /* signalling server link */
   const bad=!peerC||peerC.destroyed||peerC.disconnected||!peerC.open;
   if(bad){badSince=badSince||Date.now();
@@ -199,7 +236,7 @@ function start(raw){
   peerM.on('error',e=>{st('Error: '+e.type);lost()});
 }
 /* control channel: retries by itself until it works */
-let lastSt=0,dcTry=0,startedAt=0;
+let lastSt=0,dcTry=0,startedAt=0,lastErr='';
 function openDC(id,meta,me){
   if(me!==peerM||!want)return;
   try{dc&&dc.close()}catch(e){}
@@ -224,7 +261,7 @@ window.addEventListener('online',()=>{if(want)setTimeout(()=>start(localStorage.
 function lost(){if(!want)return;st('Reconnecting…');$('rv').srcObject=null;clearTimeout(toT);toT=setTimeout(()=>{toT=0;start(localStorage.mc)},3000)}
 function back(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;show('home')}
 function chg(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;st('');$('cp').style.display='block'}
-function onSt(d){if(d.type=='mo')return alarm(d);if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;camAu=d.au;stSeen=1;lastSt=Date.now();if($('stt').textContent.startsWith('Reconnecting controls'))st('🟢 Live');if(d.ver!=VER)st('⚠ Camera phone has an old version: reload its page');q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
+function onSt(d){if(d.type=='mo')return alarm(d);if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;camAu=d.au;if(d.err&&d.err!=lastErr)toast('Camera: '+d.err);lastErr=d.err||'';stSeen=1;lastSt=Date.now();if($('stt').textContent.startsWith('Reconnecting controls'))st('🟢 Live');if(d.ver!=VER)st('⚠ Camera phone has an old version: reload its page');q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
 setInterval(()=>$('ts').textContent=new Date(Date.now()+off).toLocaleString('sv-SE'),1000);
 const ui=()=>{$('mi').textContent=muted?'🔇':'🔊';$('bMute').classList.toggle('on',muted)};
 function unm(){muted=false;$('rv').muted=false;$('rv').play();$('snd').style.display='none';ui()}
