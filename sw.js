@@ -1,5 +1,5 @@
 /* Network-first: update the app when online, keep the last working shell for offline launch. */
-const C='cctv-v11';
+const C='cctv-v12';
 self.addEventListener('install',e=>{self.skipWaiting();
   e.waitUntil(caches.open(C).then(c=>c.addAll(['./','index.html','multi.html','manifest.webmanifest','icon-192.png','icon-512.png'])).catch(()=>{}))});
 self.addEventListener('activate',e=>e.waitUntil(
