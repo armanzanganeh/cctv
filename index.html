@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>دوربین مدار بسته</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Tahoma,sans-serif;background:#111;color:#fff;min-height:100vh}
+  .page{display:none;padding:20px;max-width:500px;margin:auto}
+  .page.on{display:block}
+  h1{font-size:22px;text-align:center}
+  button{width:100%;padding:16px;margin:8px 0;font-size:17px;border:0;border-radius:12px;background:#ff7a5c;color:#fff}
+  button.gray{background:#333}
+  input{width:100%;padding:16px;font-size:24px;text-align:center;border-radius:12px;border:0;margin:8px 0;letter-spacing:6px}
+  video{width:100%;background:#000;border-radius:12px;margin-top:10px}
+  .code{font-size:40px;text-align:center;letter-spacing:8px;background:#222;border-radius:12px;padding:14px;margin:10px 0}
+  .row{display:flex;gap:8px}
+  .row button{font-size:15px;padding:12px}
+  #status,#cstatus{text-align:center;color:#aaa;margin:8px 0}
+</style>
+</head>
+<body>
+
+<div id="home" class="page on">
+  <h1>📹 دوربین مدار بسته</h1>
+  <button onclick="startCamera()">این گوشی «دوربین» است</button>
+  <button class="gray" onclick="show('monitor')">این گوشی «مانیتور» است</button>
+</div>
+
+<div id="camera" class="page">
+  <h1>حالت دوربین</h1>
+  <div>کد این دوربین (توی مانیتور وارد کن):</div>
+  <div class="code" id="code">------</div>
+  <div id="cstatus">در حال راه‌اندازی...</div>
+  <video id="preview" autoplay playsinline muted></video>
+  <div class="row">
+    <button class="gray" onclick="switchCam()">🔄 چرخش دوربین</button>
+    <button class="gray" onclick="toggleTorch()">🔦 فلش</button>
+  </div>
+  <p style="color:#888;font-size:13px">صفحه را باز و گوشی را به شارژر وصل بگذار. صفحه خودکار خاموش نمی‌شود.</p>
+</div>
+
+<div id="monitor" class="page">
+  <h1>حالت مانیتور</h1>
+  <input id="codeInput" inputmode="numeric" maxlength="6" placeholder="کد ۶ رقمی">
+  <button onclick="connect()">اتصال</button>
+  <div id="status"></div>
+  <video id="remote" autoplay playsinline muted></video>
+  <div class="row">
+    <button class="gray" id="muteBtn" onclick="toggleMute()">🔇 صدا</button>
+    <button class="gray" onclick="capture()">📸 عکس</button>
+    <button class="gray" onclick="fs()">⛶ تمام‌صفحه</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const PREFIX = "armancctv-";
+function show(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.getElementById(id).classList.add('on');}
+const $ = id => document.getElementById(id);
+
+/* ---------- CAMERA ---------- */
+let stream, facing = "environment", peerCam, wakeLock;
+
+async function startCamera(){
+  show('camera');
+  let code = localStorage.getItem('camcode');
+  if(!code){ code = String(Math.floor(100000+Math.random()*900000)); localStorage.setItem('camcode',code); }
+  $('code').textContent = code;
+  try{
+    await openStream();
+  }catch(e){ $('cstatus').textContent = "دسترسی به دوربین/میکروفون داده نشد: "+e.message; return; }
+  try{ wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
+  document.addEventListener('visibilitychange',async()=>{ if(!document.hidden){ try{wakeLock=await navigator.wakeLock.request('screen');}catch(e){} }});
+  peerCam = new Peer(PREFIX+code);
+  peerCam.on('open',()=>$('cstatus').textContent="✅ آماده. منتظر مانیتور...");
+  peerCam.on('error',e=>$('cstatus').textContent="خطا: "+e.type+" (اگه ID taken بود، صفحه رو ببند و دوباره باز کن)");
+  peerCam.on('call',call=>{
+    call.answer(stream);
+    $('cstatus').textContent="🟢 مانیتور وصل شد";
+    call.on('close',()=>$('cstatus').textContent="✅ آماده. منتظر مانیتور...");
+  });
+}
+async function openStream(){
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true});
+  $('preview').srcObject = stream;
+}
+async function switchCam(){
+  facing = facing==="environment"?"user":"environment";
+  await openStream();
+  if(peerCam){ // update outgoing tracks for connected calls
+    Object.values(peerCam.connections).flat().forEach(c=>{
+      const s = c.peerConnection.getSenders().find(x=>x.track&&x.track.kind==='video');
+      if(s) s.replaceTrack(stream.getVideoTracks()[0]);
+    });
+  }
+}
+let torchOn=false;
+async function toggleTorch(){
+  const track = stream.getVideoTracks()[0];
+  torchOn=!torchOn;
+  try{ await track.applyConstraints({advanced:[{torch:torchOn}]}); }
+  catch(e){ alert("این دوربین فلش را پشتیبانی نمی‌کند (دوربین پشت را امتحان کن)"); torchOn=false; }
+}
+
+/* ---------- MONITOR ---------- */
+let peerMon, muted=true;
+function connect(){
+  const code = $('codeInput').value.trim();
+  if(code.length!==6){ $('status').textContent="کد باید ۶ رقم باشد"; return; }
+  $('status').textContent="در حال اتصال...";
+  if(peerMon) peerMon.destroy();
+  peerMon = new Peer();
+  peerMon.on('open',()=>{
+    const c = document.createElement('canvas'); c.width=c.height=16;
+    c.getContext('2d').fillRect(0,0,16,16);
+    const dummy = c.captureStream(1);
+    const call = peerMon.call(PREFIX+code, dummy);
+    call.on('stream',rs=>{
+      const v=$('remote'); v.srcObject=rs; v.play().catch(()=>{});
+      $('status').textContent="🟢 وصل شد";
+    });
+    call.on('close',()=>$('status').textContent="قطع شد");
+    setTimeout(()=>{ if(!$('remote').srcObject) $('status').textContent="جواب نیومد. کد درسته؟ دوربین روشنه؟"; },10000);
+  });
+  peerMon.on('error',e=>$('status').textContent="خطا: "+e.type);
+}
+function toggleMute(){
+  muted=!muted; $('remote').muted=muted;
+  $('muteBtn').textContent = muted?"🔇 صدا":"🔊 صدا";
+}
+function capture(){
+  const v=$('remote'); if(!v.videoWidth) return;
+  const c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  const a=document.createElement('a'); a.href=c.toDataURL('image/jpeg',0.9);
+  a.download='capture-'+Date.now()+'.jpg'; a.click();
+}
+function fs(){
+  const v=$('remote');
+  (v.requestFullscreen||v.webkitRequestFullscreen||v.webkitEnterFullscreen).call(v);
+}
+</script>
+</body>
+</html>
