@@ -102,10 +102,16 @@ async function grab(want){
   }catch(e){}
   let err;
   for(const c of list){
-    try{const s=await md.getUserMedia(c),f=s.getVideoTracks()[0].getSettings().facingMode;
-      if(f&&f!=want){s.getTracks().forEach(t=>t.stop());err=new Error('wrong camera');continue}
-      return s}
-    catch(e){err=e;await sleep(250)}
+    for(let k=0;k<3;k++){
+      try{const s=await md.getUserMedia(c),f=s.getVideoTracks()[0].getSettings().facingMode;
+        if(f&&f!=want){s.getTracks().forEach(t=>t.stop());err=new Error('wrong camera');break}
+        return s}
+      catch(e){err=e;
+        /* "Could not start video source": camera still busy → wait and retry the same request */
+        if(e&&(e.name=='NotReadableError'||e.name=='AbortError'||/start video|in use/i.test(e.message||'')))await sleep(1000);
+        else break}
+    }
+    await sleep(250);
   }
   throw err||new Error('no camera');
 }
@@ -113,8 +119,9 @@ async function openVideo(){
   if(vBusy)return;vBusy=true;
   const prev=facing;
   try{
-    vs&&vs.getTracks().forEach(t=>t.stop());   /* iOS can't open two cameras at once */
-    await sleep(150);
+    $('pv').srcObject=null;                    /* let go of the old camera completely */
+    vs&&vs.getTracks().forEach(t=>t.stop());   /* phones can't open two cameras at once */
+    await sleep(700);
     try{vs=await grab(facing);camErr=''}
     catch(e){
       if(facing!=prev)facing=prev;   /* switch failed → go back to the working camera */
