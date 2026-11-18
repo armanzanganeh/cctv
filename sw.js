@@ -1,7 +1,7 @@
 /* network-first: always the newest version when online, cached copy when offline */
-const C='cctv-v8';
+const C='cctv-v9';
 self.addEventListener('install',e=>{self.skipWaiting();
-  e.waitUntil(caches.open(C).then(c=>c.addAll(['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png'])).catch(()=>{}))});
+  e.waitUntil(caches.open(C).then(c=>c.addAll(['./','index.html','multi.html','manifest.webmanifest','icon-192.png','icon-512.png'])).catch(()=>{}))});
 self.addEventListener('activate',e=>e.waitUntil(
   caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
