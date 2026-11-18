@@ -42,7 +42,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 #tgm{margin-top:8px;min-height:20px;font-size:14px;word-break:break-word}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v9</small></span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v10</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
 <button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button>
 <button class="btn g" onclick="location.href='multi.html'">🧩 All cameras (multi-view)</button>
@@ -89,13 +89,17 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 <input id="tgc" class="tx" autocomplete="off" inputmode="numeric" placeholder="Chat ID  (e.g. 123456789)">
 <label style="display:block;text-align:left">Motion / sound photo alerts (on the CAMERA phone)
 <select id="tgl"><option value="0">Off</option><option value="1">Low</option><option value="2">Medium</option><option value="3">High</option></select></label>
+<input id="tgn" class="tx" autocomplete="off" maxlength="24" placeholder="Camera name  (e.g. Living room)">
+<label style="display:block;text-align:left">Minimum time between alerts
+<select id="tgg"><option value="60">1 minute</option><option value="120">2 minutes</option><option value="300">5 minutes</option><option value="600">10 minutes</option></select></label>
+<label style="display:flex;gap:10px;align-items:center;text-align:left;margin:6px 0"><input type="checkbox" id="tgs" style="width:20px;height:20px"> Also alert on loud sound</label>
 <small>Camera phone: sends photo on motion/sound, "camera online / was offline", battery &amp; charger alerts.<br>Monitor phone (optional): tells you if the camera stays unreachable for 2 minutes.</small>
 <button class="btn g" onclick="tgTest()">Send test message</button><button class="btn" onclick="tgSave()">Save</button><button class="btn g" onclick="$('tgp').style.display='none'">Close</button><div id="tgm"></div></div></div>
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const VER='v9',$=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v10',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
@@ -105,16 +109,23 @@ const rnd=n=>String(Math.floor(Math.random()*10**n)).padStart(n,'0');
 const tgCfg=()=>{try{return JSON.parse(localStorage.tg||'{}')}catch(e){return{}}};
 const tgOn=()=>{const g=tgCfg();return !!(g.t&&g.c)};
 const fmtD=ms=>{const m=Math.round(ms/60000);return m<60?m+' min':Math.floor(m/60)+' h '+(m%60)+' min'};
+const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const tgName=()=>(tgCfg().n||'').trim();
+/* clean message layout: bold title, then camera name, then detail lines */
+const tgMsg=(title,...lines)=>title+(tgName()?'\n📍 '+esc(tgName()):'')+lines.map(l=>'\n'+l).join('');
+const fmtDur=ms=>{const t=Math.round(ms/1000);return t<60?t+' s':Math.floor(t/60)+' min '+(t%60)+' s'};
+const tgBtn=()=>({inline_keyboard:[[{text:'▶️ Open live view',url:new URL('index.html#mon='+(localStorage.cc||''),location.href).href}]]});
+const tgApi=(m,body)=>{const g=tgCfg();return fetch('https://api.telegram.org/bot'+g.t+'/'+m,body.constructor===FormData?{method:'POST',body}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json())};
 /* returns '' on success, or an error text */
 async function tgSend(text){const g=tgCfg();if(!g.t||!g.c)return 'not configured';
-  try{const r=await fetch('https://api.telegram.org/bot'+g.t+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:g.c,text})});
-    const j=await r.json();return j.ok?'':(j.description||'error')}catch(e){return 'network error'}}
-async function tgPhoto(blob,caption){const g=tgCfg();if(!g.t||!g.c)return 'not configured';
-  try{const f=new FormData();f.append('chat_id',g.c);f.append('caption',caption);f.append('photo',blob,'alert.jpg');
-    const r=await fetch('https://api.telegram.org/bot'+g.t+'/sendPhoto',{method:'POST',body:f});const j=await r.json();return j.ok?'':(j.description||'error')}catch(e){return 'network error'}}
-function tgOpen(){const g=tgCfg();$('tgt').value=g.t||'';$('tgc').value=g.c||'';$('tgl').value=String(g.l||0);$('tgm').textContent='';$('tgp').style.display='block'}
-function tgSave(){localStorage.tg=JSON.stringify({t:$('tgt').value.trim(),c:$('tgc').value.trim(),l:+$('tgl').value});$('tgm').textContent='✅ Saved';setTimeout(()=>$('tgp').style.display='none',700)}
-async function tgTest(){tgSave();$('tgm').textContent='Sending…';const e=await tgSend('✅ CCTV test message from '+(localStorage.role=='cam'?'the CAMERA phone':'this phone'));$('tgm').textContent=e?'❌ '+e:'✅ Sent — check Telegram'}
+  try{const j=await tgApi('sendMessage',{chat_id:g.c,text,parse_mode:'HTML',disable_web_page_preview:true});return j.ok?'':(j.description||'error')}catch(e){return 'network error'}}
+async function tgPhoto(blob,caption,btn){const g=tgCfg();if(!g.t||!g.c)return{e:'not configured'};
+  try{const f=new FormData();f.append('chat_id',g.c);f.append('caption',caption);f.append('parse_mode','HTML');f.append('photo',blob,'alert.jpg');if(btn)f.append('reply_markup',JSON.stringify(tgBtn()));
+    const j=await tgApi('sendPhoto',f);return j.ok?{e:'',id:j.result.message_id}:{e:j.description||'error'}}catch(e){return{e:'network error'}}}
+async function tgEdit(id,caption){const g=tgCfg();try{await tgApi('editMessageCaption',{chat_id:g.c,message_id:id,caption,parse_mode:'HTML',reply_markup:tgBtn()})}catch(e){}}
+function tgOpen(){const g=tgCfg();$('tgt').value=g.t||'';$('tgc').value=g.c||'';$('tgn').value=g.n||'';$('tgl').value=String(g.l||0);$('tgg').value=String(g.gap||120);$('tgs').checked=!!g.snd;$('tgm').textContent='';$('tgp').style.display='block'}
+function tgSave(){localStorage.tg=JSON.stringify({t:$('tgt').value.trim(),c:$('tgc').value.trim(),n:$('tgn').value.trim(),l:+$('tgl').value,gap:+$('tgg').value,snd:$('tgs').checked});$('tgm').textContent='✅ Saved';setTimeout(()=>$('tgp').style.display='none',700)}
+async function tgTest(){tgSave();$('tgm').textContent='Sending…';const e=await tgSend(tgMsg('✅ <b>Test OK</b>','You will receive alerts here.'));$('tgm').textContent=e?'❌ '+e:'✅ Sent — check Telegram'}
 /* PWA */
 let instEv=null;
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEv=e;$('inst').style.display='block'});
@@ -185,7 +196,7 @@ async function openVideo(){
     try{await $('pv').play()}catch(playError){console.warn('Preview playback was blocked:',playError)}
     const vt=vs.getVideoTracks()[0];
     cstream=new MediaStream([vt,...(as?as.getAudioTracks():[])]);
-    const fm=vt.getSettings().facingMode;if(fm)facing=fm;
+    const fm=vt.getSettings().facingMode;if(fm)facing=fm;vSince=Date.now();pm=null;win=[];
     calls.slice().forEach(c=>{const ss=c.peerConnection.getSenders();
       if(!ss.some(s=>s.track&&s.track.kind=='video'))return c.close();   /* call started without video → monitor reconnects */
       ss.forEach(s=>{if(s.track&&s.track.kind=='video')s.replaceTrack(vt)});applyBr(c)});
@@ -234,16 +245,18 @@ async function startCamera(){
 async function tgLife(){
   const last=+localStorage.hb||0,gap=Date.now()-last;
   localStorage.hb=Date.now();setInterval(()=>{localStorage.hb=Date.now()},15000);
-  tgSend('📷 Camera online'+(last&&gap>120000?' — it was OFFLINE for '+fmtD(gap)+' (since '+new Date(last).toLocaleTimeString('sv-SE')+')':''));
+  /* announce only a real restart / outage — a quick page reload stays silent */
+  if(!last||gap>120000)tgSend(tgMsg('🟢 <b>Camera online</b>',last?'⏱ Was offline for <b>'+fmtD(gap)+'</b> (since '+new Date(last).toLocaleTimeString('sv-SE')+')':'Alerts are active.'));
   let offAt=0;addEventListener('offline',()=>{offAt=Date.now()});
-  addEventListener('online',()=>{if(offAt){const d=Date.now()-offAt;offAt=0;setTimeout(()=>tgSend('🌐 Camera internet is back — it was down for '+fmtD(d)),1500)}});
-  try{const b=await navigator.getBattery();let low=0,crit=0;
+  addEventListener('online',()=>{if(offAt){const d=Date.now()-offAt;offAt=0;if(d>60000)setTimeout(()=>tgSend(tgMsg('🌐 <b>Internet is back</b>','⏱ Was down for <b>'+fmtD(d)+'</b>')),1500)}});
+  try{const b=await navigator.getBattery();let low=0,crit=0,ct=0;
     const chk=()=>{const p=Math.round(b.level*100);
-      if(!b.charging&&p<=20&&!low){low=1;tgSend('🪫 Camera battery low: '+p+'%')}
-      if(!b.charging&&p<=8&&!crit){crit=1;tgSend('🔴 Camera battery critical: '+p+'% — it will die soon')}
+      if(!b.charging&&p<=20&&!low){low=1;tgSend(tgMsg('🪫 <b>Battery low</b> — '+p+'%'))}
+      if(!b.charging&&p<=8&&!crit){crit=1;tgSend(tgMsg('🔴 <b>Battery critical</b> — '+p+'%','The camera will shut down soon.'))}
       if(b.charging||p>25){low=0;crit=0}};
     b.addEventListener('levelchange',chk);
-    b.addEventListener('chargingchange',()=>{tgSend(b.charging?'🔌 Camera charger connected':'⚠️ Camera charger DISCONNECTED ('+Math.round(b.level*100)+'%)');chk()});
+    /* charger: report only if the new state stays for 20 s (cables flicker) */
+    b.addEventListener('chargingchange',()=>{const st=b.charging;clearTimeout(ct);ct=setTimeout(()=>{if(b.charging===st)tgSend(st?tgMsg('🔌 <b>Charger connected</b>','🔋 '+Math.round(b.level*100)+'%'):tgMsg('⚠️ <b>Charger disconnected</b>','🔋 '+Math.round(b.level*100)+'%'))},20000);chk()});
     chk();
   }catch(e){}
 }
@@ -338,9 +351,9 @@ setInterval(()=>{
   if(!want||!peerM)return;
   const raw=localStorage.mc,live=$('rv').srcObject;
   if(!live){if(!lostAt)lostAt=Date.now();
-    if(!offSent&&tgOn()&&Date.now()-lostAt>120000){offSent=1;tgSend('🔴 Monitor cannot reach the camera for 2 minutes (camera phone off / no internet / page closed)')}
+    if(!offSent&&tgOn()&&Date.now()-lostAt>120000){offSent=1;tgSend(tgMsg('🔴 <b>Camera unreachable</b>','No connection for 2 minutes.','The camera phone may be off, offline, or its page was closed.'))}
     if(!toT&&Date.now()-startedAt>16000)lost();return}
-  lostAt=0;if(offSent){offSent=0;tgSend('🟢 Camera is reachable again')}
+  lostAt=0;if(offSent){offSent=0;tgSend(tgMsg('🟢 <b>Camera reachable again</b>'))}
   const pcs=call&&call.peerConnection&&call.peerConnection.iceConnectionState;
   if(pcs=='failed'||pcs=='closed'){lost();return}
   if(Date.now()-lastSt>10000&&peerM.open){lastSt=Date.now();st('Reconnecting controls…');openDC(PRE+raw.slice(0,6),{pin:raw.slice(6)},peerM)}
@@ -422,7 +435,7 @@ async function gal(){
 }
 
 /* ===== extras ===== */
-let moLvl=0,trk=0,pm=null,lastMo=0,lastTg=0,an,ac,taps=[];const MOT=[0,.08,.03,.012];
+let moLvl=0,trk=0,pm=null,lastMo=0,lastTg=0,ev=null,win=[],vSince=0,tgLog=[],tgCapNote=0,an,ac,taps=[];const MOT=[0,.08,.03,.012],MOT_TG=[0,.06,.03,.02];
 function blk(on){$('dim').style.display=on?'block':'none';if(on)try{document.documentElement.requestFullscreen()}catch(e){}}
 function tap3(){const n=Date.now();taps=taps.filter(t=>n-t<900);taps.push(n);if(taps.length>=3){taps=[];blk(false)}}
 function detect(){
@@ -431,24 +444,44 @@ function detect(){
   setInterval(()=>{$('au').style.display=ac&&ac.state=='running'?'none':'block'},1000);
   document.addEventListener('pointerdown',()=>{ac&&ac.resume();$('ta').play().catch(()=>{})});
   setInterval(()=>{
-    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length,trkA=trk&&conns.length;
+    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length,trkA=trk&&conns.length,now=Date.now();
+    if(ev&&now-ev.last>45000){tgEndEvent(ev);ev=null}      /* event over: quiet for 45 s */
     if(!tgA&&!monA&&!trkA)return;const v=$('pv');if(!v.videoWidth)return;
-    const lvl=Math.max(monA?moLvl:0,tgA?g.l:0);
     x.drawImage(v,0,0,64,36);const d=x.getImageData(0,0,64,36).data,gr=new Uint8Array(2304);let n=0,sx=0,sy=0;
-    for(let i=0;i<2304;i++){gr[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(pm&&Math.abs(gr[i]-pm[i])>28){n++;sx+=i%64;sy+=(i/64|0)}}
-    if(trkA&&pm&&n>=14){const m={type:'tr',x:sx/n/64,y:sy/n/36};conns.forEach(k=>k.open&&k.send(m))}
-    const hit=lvl>0&&pm&&n/2304>MOT[lvl];pm=gr;
-    let snd=false;if(an){an.getByteTimeDomainData(buf);let m=0;for(const b of buf)m=Math.max(m,Math.abs(b-128));snd=m>70}
-    if(!(hit||snd))return;const now=Date.now(),why=hit?'motion':'sound';
-    if(monA&&now-lastMo>10000){lastMo=now;const s=document.createElement('canvas');s.width=480;s.height=270;s.getContext('2d').drawImage(v,0,0,480,270);
-      const m={type:'mo',why,img:s.toDataURL('image/jpeg',.6),t:now};conns.forEach(k=>k.open&&k.send(m))}
-    if(tgA&&now-lastTg>30000){lastTg=now;const s=document.createElement('canvas'),W=Math.min(960,v.videoWidth);s.width=W;s.height=Math.round(W*v.videoHeight/v.videoWidth);
-      s.getContext('2d').drawImage(v,0,0,s.width,s.height);
-      s.toBlob(async b=>{let bt='';try{const B=await navigator.getBattery();bt=' · 🔋'+Math.round(B.level*100)+'%'}catch(e){}
-        const e=await tgPhoto(b,(why=='sound'?'🔊 Sound detected':'🚨 Motion detected')+' · '+new Date().toLocaleTimeString('sv-SE')+bt+'\n▶ Open live view: '+new URL('index.html#mon='+localStorage.cc,location.href).href);
-        if(e){camErr='Telegram: '+e;sendStatus()}},'image/jpeg',.8)}
+    for(let i=0;i<2304;i++){gr[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(pm&&Math.abs(gr[i]-pm[i])>32){n++;sx+=i%64;sy+=(i/64|0)}}
+    const frac=n/2304,still=!pm||now-vSince<5000||frac>.5;   /* camera warm-up, or a lighting jump (not real motion) */
+    pm=gr;if(still){win=[];return}
+    if(trkA&&n>=14){const m={type:'tr',x:sx/n/64,y:sy/n/36};conns.forEach(k=>k.open&&k.send(m))}
+    let peak=0;if(an){an.getByteTimeDomainData(buf);for(const b of buf)peak=Math.max(peak,Math.abs(b-128))}
+    /* live alarm on the monitor screen */
+    if(monA&&(frac>MOT[moLvl]||peak>70)&&now-lastMo>10000){lastMo=now;const s=document.createElement('canvas');s.width=480;s.height=270;s.getContext('2d').drawImage(v,0,0,480,270);
+      const m={type:'mo',why:frac>MOT[moLvl]?'motion':'sound',img:s.toDataURL('image/jpeg',.6),t:now};conns.forEach(k=>k.open&&k.send(m))}
+    /* Telegram: motion must last ~3 s (3 of the last 6 checks), one message per event */
+    if(!tgA)return;
+    const hitT=frac>MOT_TG[g.l],sndT=!!g.snd&&peak>90;
+    win.push(hitT||sndT?1:0);if(win.length>6)win.shift();
+    if(win.reduce((a,b)=>a+b,0)<3)return;
+    if(ev){ev.last=now;return}                              /* same event: no extra photo */
+    if(now-lastTg<(g.gap||120)*1000)return;
+    lastTg=now;tgNewEvent(v,hitT?'motion':'sound');
   },500);
 }
+async function tgNewEvent(v,why){
+  const now=Date.now();tgLog=tgLog.filter(t=>now-t<3600000);
+  if(tgLog.length>=8){if(now-tgCapNote>3600000){tgCapNote=now;tgSend(tgMsg('⏸ <b>Too many alerts</b>','Photos are paused for a while to keep this chat tidy.'))}return}
+  tgLog.push(now);
+  const e=ev={t0:now,last:now,why,msg:0,bt:''};
+  const s=document.createElement('canvas'),W=Math.min(960,v.videoWidth);s.width=W;s.height=Math.round(W*v.videoHeight/v.videoWidth);
+  s.getContext('2d').drawImage(v,0,0,s.width,s.height);
+  const blob=await new Promise(r=>s.toBlob(r,'image/jpeg',.8));
+  try{const B=await navigator.getBattery();e.bt='🔋 '+Math.round(B.level*100)+'%'}catch(x){}
+  const r=await tgPhoto(blob,tgCap(e,false),true);
+  if(r.e){camErr='Telegram: '+r.e;sendStatus()}else e.msg=r.id;
+}
+function tgCap(e,done){const T=t=>new Date(t).toLocaleTimeString('sv-SE');
+  return (e.why=='sound'?'🔊 <b>Sound detected':'🚨 <b>Motion detected')+(done?' — ended':'')+'</b>'+(tgName()?'\n📍 '+esc(tgName()):'')
+    +'\n🕐 '+T(e.t0)+(done?' → '+T(e.last)+'  ('+fmtDur(e.last-e.t0)+')':'')+(e.bt?'\n'+e.bt:'')}
+function tgEndEvent(e){if(e.msg&&e.last-e.t0>=8000)tgEdit(e.msg,tgCap(e,true))}   /* update the SAME message with the duration */
 async function siren(){try{await ac.resume();const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.connect(g);g.connect(ac.destination);g.gain.value=.6;o.start();const t=ac.currentTime;for(let i=0;i<20;i++)o.frequency.setValueAtTime(i%2?900:1500,t+i*.25);o.stop(t+5)}catch(e){}}
 let mo=0,alarmT,blkOn=false,camAu,stSeen=0;
 function alarm(d){
