@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CCTV – All cameras</title>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CCTV – Security dashboard</title>
 <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0e1116"><link rel="icon" href="icon-192.png">
 <style>
 :root{--bg:#0e1116;--card:#171b22;--line:#252b36;--ac:#ff7a5c;--ac2:#ff4d8d;--tx:#e8eaf0;--mut:#8b93a3}
@@ -24,8 +24,24 @@ header .t{flex:1}header b{font-size:22px;font-weight:500;cursor:pointer;width:36
 .btn{width:100%;padding:14px;margin:6px 0;font-size:16px;font-weight:600;border:0;border-radius:14px;background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff}
 .btn.g{background:var(--bg);border:1px solid var(--line);color:var(--tx)}
 #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 18px;border-radius:24px;opacity:0;transition:.3s;z-index:200;pointer-events:none}
+
+#hub{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:10px}
+.hubbtn{border:1px solid var(--line);background:var(--card);color:var(--tx);padding:9px 13px;border-radius:12px;font-weight:600}
+.panel{display:none;position:fixed;inset:0;z-index:160;background:#0e1116;overflow:auto;padding-bottom:30px}
+.panel header{position:sticky;top:0}
+.panelbox{max-width:760px;margin:14px auto;padding:16px;background:var(--card);border:1px solid var(--line);border-radius:18px}
+.panelbox label{display:flex;gap:10px;align-items:center;margin:12px 0;text-align:left}
+.panelbox input[type=text],.panelbox input:not([type]),.panelbox select{width:100%;padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--tx);margin:6px 0}
+.panelbox input[type=checkbox]{width:20px;height:20px;accent-color:var(--ac)}
+.event{display:grid;grid-template-columns:76px 1fr;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.event img{width:76px;height:58px;object-fit:cover;background:#000;border-radius:10px}
+.evmeta{color:var(--mut);font-size:12px;margin-top:4px}
+.evempty{color:var(--mut);text-align:center;padding:35px 10px}
+.tile .alertmark{position:absolute;right:8px;top:48px;background:#e11d48;color:white;border-radius:10px;padding:3px 7px;font-size:11px;display:none}
+#dashstatus{text-align:center;color:var(--mut);font-size:12px;padding:0 10px 8px}
 </style></head><body>
-<header><b onclick="location.href='index.html'">‹</b><span class="t">🧩 All cameras</span><b onclick="addOpen()">＋</b></header>
+<header><b onclick="location.href='index.html'">‹</b><span class="t">🧩 Security dashboard</span><button class="hubbtn" onclick="eventsOpen()">🕒 History</button><button class="hubbtn" onclick="alertsOpen()">🔔 Alerts</button><b onclick="addOpen()">＋</b></header>
+<div id="hub"><span id="dashstatus">Connecting cameras…</span></div>
 <div id="grid"></div>
 <div id="empty">No cameras yet.<br>Tap <b>＋</b> and add each camera phone's 12-digit code with a name<br>(Living room, Bedroom, Entrance…). Up to 6 cameras.</div>
 <div id="addp"><div class="box"><h3 style="margin:0 0 8px">Add camera</h3>
@@ -33,6 +49,23 @@ header .t{flex:1}header b{font-size:22px;font-weight:500;cursor:pointer;width:36
 <input id="ac" inputmode="numeric" placeholder="Camera code 123456-123456">
 <button class="btn" onclick="addSave()">Add</button><button class="btn g" onclick="$('addp').style.display='none'">Close</button></div></div>
 <div id="toast"></div>
+<div id="eventsPanel" class="panel"><header><b onclick="$('eventsPanel').style.display='none'">‹</b><span class="t">🕒 Event history</span><button class="hubbtn" onclick="clearEvents()">Clear</button></header><div class="panelbox"><div id="eventList"></div></div></div>
+<div id="alertsPanel" class="panel"><header><b onclick="$('alertsPanel').style.display='none'">‹</b><span class="t">🔔 Central alert management</span></header>
+<div class="panelbox">
+  <p style="color:var(--mut);line-height:1.6;margin-top:0">These controls are applied to every connected camera. Motion and sound are analysed on the camera phone; confirmed events are collected here into one timeline.</p>
+  <label><input type="checkbox" id="aOn"> Enable central event monitoring</label>
+  <label style="display:block">Motion sensitivity<select id="aLevel"><option value="1">Low</option><option value="2">Medium</option><option value="3">High</option></select></label>
+  <label><input type="checkbox" id="aSound"> Include loud-sound alerts</label>
+  <hr style="border-color:var(--line);opacity:.5;margin:18px 0">
+  <label><input type="checkbox" id="aTg"> Send event photos to Telegram from this dashboard</label>
+  <input id="aToken" autocomplete="off" placeholder="Telegram Bot Token">
+  <input id="aChat" autocomplete="off" placeholder="Telegram Chat ID">
+  <button class="btn" onclick="alertsSave()">Save &amp; apply to all cameras</button>
+  <button class="btn g" onclick="centralTestPhoto()">📷 Send Telegram test photo</button>
+  <button class="btn g" onclick="enableBrowserNotifications()">Enable browser notifications</button>
+  <div id="alertStatus" style="margin-top:12px;word-break:break-word;color:var(--mut)"></div>
+  <small style="color:var(--mut);line-height:1.6;display:block;margin-top:14px">The bot token is stored in this browser's local storage. For a public product, move it to a protected backend. Existing per-camera Telegram settings in index.html are left intact and continue to work.</small>
+</div></div>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 const $=id=>document.getElementById(id),PRE="armancctv-",MAX=6;
@@ -47,8 +80,8 @@ document.addEventListener('pointerdown',()=>ctx&&ctx.resume(),{once:true});
 
 function build(c){
   const t=document.createElement('div');t.className='tile';
-  t.innerHTML='<video autoplay playsinline muted></video><div class="nm"></div><div class="dot"></div><div class="stt"></div><div class="bt"></div><div class="bar"><button class="snd">🔇</button><a class="ctl">⚙ Controls</a><button class="del">🗑</button></div>';
-  c.t=t;c.v=t.querySelector('video');c.stt=t.querySelector('.stt');c.dot=t.querySelector('.dot');c.bt=t.querySelector('.bt');
+  t.innerHTML='<video autoplay playsinline muted></video><div class="nm"></div><div class="dot"></div><div class="stt"></div><div class="bt"></div><div class="alertmark">● Alert</div><div class="bar"><button class="snd">🔇</button><a class="ctl">⚙ Controls</a><button class="del">🗑</button></div>';
+  c.t=t;c.v=t.querySelector('video');c.stt=t.querySelector('.stt');c.dot=t.querySelector('.dot');c.bt=t.querySelector('.bt');c.alertmark=t.querySelector('.alertmark');
   t.querySelector('.nm').textContent=c.name;
   const ctl=t.querySelector('.ctl');ctl.href='index.html#mon='+c.code;ctl.onclick=e=>e.stopPropagation();
   const snd=t.querySelector('.snd');
@@ -66,11 +99,16 @@ function connectCam(c){
   peer.on('open',()=>{
     const cv=document.createElement('canvas');cv.width=cv.height=16;cv.getContext('2d').fillRect(0,0,16,16);
     const o=cv.captureStream(1);silent&&o.addTrack(silent);
-    const dc=peer.connect(id,{metadata:meta,reliable:true});
-    dc.on('data',d=>{if(d.type=='st'){c.lastSt=Date.now();if(d.bat!=null)c.bt.textContent='🔋'+d.bat+'%'}});
-    const call=peer.call(id,o,{metadata:meta});
-    call.on('stream',rs=>{c.v.srcObject=rs;c.v.play().catch(()=>{});c.live=true;c.lastSt=Date.now();setSt(c,'Live',true)});
-    call.on('close',()=>{setSt(c,'Reconnecting…',false);again(3000)});call.on('error',()=>again(3000));
+    const dc=c.dc=peer.connect(id,{metadata:meta,reliable:true});
+    dc.on('open',()=>{const cfg=alertCfg();try{dc.send({c:'dashcfg',v:{on:cfg.on,level:cfg.level,snd:cfg.snd}})}catch(e){}});
+    dc.on('data',d=>{
+      if(d.type=='st'){c.lastSt=Date.now();if(d.bat!=null)c.bt.textContent='🔋'+d.bat+'%';}
+      else if(d.type=='dash_event')handleCamEvent(c,d);
+      else if(d.type=='dash_event_end')finishCamEvent(c,d);
+    });
+    const call=c.call=peer.call(id,o,{metadata:meta});
+    call.on('stream',rs=>{c.v.srcObject=rs;c.v.play().catch(()=>{});c.live=true;c.lastSt=Date.now();setSt(c,'Live',true);render()});
+    call.on('close',()=>{setSt(c,'Reconnecting…',false);render();again(3000)});call.on('error',()=>{render();again(3000)});
     const pc=call.peerConnection;
     pc.oniceconnectionstatechange=()=>{const s=pc.iceConnectionState;if(s=='failed'||s=='closed'){setSt(c,'Reconnecting…',false);again(3000)}
       if(s=='disconnected')setTimeout(()=>{const x=pc.iceConnectionState;if(x!='connected'&&x!='completed')again(500)},6000)};
@@ -79,8 +117,8 @@ function connectCam(c){
   peer.on('disconnected',()=>{try{peer.reconnect()}catch(e){}});
   peer.on('error',e=>{setSt(c,e.type=='peer-unavailable'?'Camera offline':'Error: '+e.type,false);again(5000)});
 }
-function remove(c){clearTimeout(c.tm);try{c.peer&&c.peer.destroy()}catch(e){}c.t.remove();cams.splice(cams.indexOf(c),1);save();render()}
-const render=()=>{$('empty').style.display=cams.length?'none':'block'};
+function remove(c){clearTimeout(c.tm);try{c.peer&&c.peer.destroy()}catch(e){}if(c.v)c.v.srcObject=null;c.t.remove();cams.splice(cams.indexOf(c),1);save();render()}
+const render=()=>{$('empty').style.display=cams.length?'none':'block';$('dashstatus').textContent=cams.length+' camera(s) configured · '+cams.filter(c=>c.live).length+' live';};
 function add(name,code){const c={name,code};cams.push(c);build(c);connectCam(c);render()}
 function addOpen(){if(cams.length>=MAX)return toast('Maximum '+MAX+' cameras');
   $('an').value='';const mc=localStorage.mc||'';$('ac').value=cams.some(c=>c.code==mc)?'':(mc?mc.slice(0,6)+'-'+mc.slice(6):'');$('addp').style.display='block'}
@@ -88,6 +126,26 @@ function addSave(){const code=$('ac').value.replace(/\D/g,''),name=$('an').value
   if(code.length!=12)return toast('Code must be 12 digits');if(cams.some(c=>c.code==code))return toast('Already added');
   add(name,code);save();$('addp').style.display='none'}
 list.forEach(x=>x&&x.code&&add(x.name||'Camera',x.code));render();
+
+/* Central dashboard settings and persistent event timeline */
+const alertCfg=()=>{try{return Object.assign({on:false,level:1,snd:false,telegram:false,token:'',chat:''},JSON.parse(localStorage.mcAlerts||'{}'))}catch(e){return{on:false,level:1,snd:false,telegram:false,token:'',chat:''}}};
+const eventDB=new Promise((resolve,reject)=>{const r=indexedDB.open('cctv-dashboard-events',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('events'))r.result.createObjectStore('events',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+async function eventOp(mode,fn){const db=await eventDB;return new Promise((resolve,reject)=>{const tx=db.transaction('events',mode),store=tx.objectStore('events');let out;try{out=fn(store)}catch(e){reject(e);return}tx.oncomplete=()=>resolve(out&&out.result);tx.onerror=()=>reject(tx.error)})}
+function sendDashCfg(c){if(c.dc&&c.dc.open){const a=alertCfg();try{c.dc.send({c:'dashcfg',v:{on:a.on,level:a.level,snd:a.snd}})}catch(e){}}}
+function alertsOpen(){const a=alertCfg();$('aOn').checked=!!a.on;$('aLevel').value=String(a.level||1);$('aSound').checked=!!a.snd;$('aTg').checked=!!a.telegram;$('aToken').value=a.token||'';$('aChat').value=a.chat||'';$('alertStatus').textContent='Settings are stored on this dashboard device.';$('alertsPanel').style.display='block'}
+function alertsSave(){const a={on:$('aOn').checked,level:+$('aLevel').value||1,snd:$('aSound').checked,telegram:$('aTg').checked,token:$('aToken').value.trim(),chat:$('aChat').value.trim()};if(a.telegram&&(!a.token||!a.chat)){$('alertStatus').textContent='❌ Enter both Bot Token and Chat ID, or turn Telegram sending off.';return}localStorage.mcAlerts=JSON.stringify(a);cams.forEach(sendDashCfg);$('alertStatus').textContent='✅ Saved and sent to '+cams.filter(c=>c.dc&&c.dc.open).length+' connected camera(s). New connections will receive these settings automatically.';toast('Central alerts updated')}
+async function enableBrowserNotifications(){if(!('Notification'in window)){$('alertStatus').textContent='This browser does not support notifications.';return}const p=await Notification.requestPermission();$('alertStatus').textContent=p==='granted'?'✅ Browser notifications enabled.':'Notifications were not permitted.'}
+function eventsOpen(){$('eventsPanel').style.display='block';renderEvents()}
+async function renderEvents(){const box=$('eventList');box.innerHTML='';try{const all=await eventOp('readonly',s=>s.getAll());all.sort((a,b)=>b.t-a.t);if(!all.length){box.innerHTML='<div class="evempty">No events recorded yet.<br>Enable Central event monitoring in Alerts.</div>';return}for(const e of all.slice(0,200)){const row=document.createElement('div');row.className='event';let img;if(e.image){img=document.createElement('img');img.src=URL.createObjectURL(e.image)}else{img=document.createElement('div');img.className='event';img.style.display='block'}const body=document.createElement('div'),title=document.createElement('b');title.textContent=(e.why==='sound'?'🔊 Sound detected':'🚨 Motion detected')+' · '+e.name;const meta=document.createElement('div');meta.className='evmeta';meta.textContent=new Date(e.t).toLocaleString()+(e.last&&e.last>e.t?' · '+Math.round((e.last-e.t)/1000)+'s':'')+(e.sent?' · Telegram sent':'');body.append(title,meta);row.append(img,body);box.append(row)}}catch(e){box.textContent='Could not load event history: '+e.message}}
+async function logCamEvent(c,d){const id=d.id||c.code+'-'+d.t;let image=null;try{if(d.img)image=await(await fetch(d.img)).blob()}catch(e){}const event={id,camera:c.code,name:c.name,why:d.why,t:d.t||Date.now(),last:d.t||Date.now(),image,sent:false};try{await eventOp('readwrite',s=>s.put(event));const all=await eventOp('readonly',s=>s.getAll());if(all.length>200){all.sort((a,b)=>a.t-b.t);for(const old of all.slice(0,all.length-200))await eventOp('readwrite',s=>s.delete(old.id))}}catch(e){toast('Could not save event history: '+e.message)}c.alertmark.style.display='block';c.alertmark.textContent=d.why==='sound'?'🔊 Sound':'🚨 Motion';toast(c.name+': '+(d.why==='sound'?'sound detected':'motion detected'));if('Notification'in window&&Notification.permission==='granted'&&document.hidden)new Notification('CCTV · '+c.name,{body:d.why==='sound'?'Loud sound detected':'Motion detected'});const a=alertCfg();if(a.telegram&&a.token&&a.chat&&image){try{await centralTgPhoto(image,'🚨 <b>'+(d.why==='sound'?'Sound detected':'Motion detected')+'</b>\n📍 '+escapeHtml(c.name)+'\n🕐 '+new Date(event.t).toLocaleString(),c.code);event.sent=true;await eventOp('readwrite',s=>s.put(event))}catch(e){toast('Telegram photo failed: '+e.message)}}if($('eventsPanel').style.display==='block')renderEvents()}
+async function handleCamEvent(c,d){await logCamEvent(c,d)}
+async function finishCamEvent(c,d){try{const e=await eventOp('readonly',s=>s.get(d.id));if(e){e.last=d.last||Date.now();await eventOp('readwrite',s=>s.put(e));if(c.alertmark)c.alertmark.style.display='none';if($('eventsPanel').style.display==='block')renderEvents()}}catch(e){}}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function centralTgRequest(method,body){const a=alertCfg();if(!a.token||!a.chat)throw new Error('Bot Token or Chat ID is missing');let response;try{response=await fetch('https://api.telegram.org/bot'+a.token+'/'+method,body instanceof FormData?{method:'POST',body}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){throw new Error('Network/CORS error: '+e.message)}let j;try{j=await response.json()}catch(e){throw new Error('Telegram returned HTTP '+response.status+' without JSON')}if(!response.ok||!j.ok)throw new Error(j.description||('Telegram HTTP '+response.status));return j}
+async function centralTgPhoto(blob,caption,code){const a=alertCfg();const f=new FormData();f.append('chat_id',a.chat);f.append('caption',caption);f.append('parse_mode','HTML');f.append('photo',blob,'cctv-event.jpg');if(code)f.append('reply_markup',JSON.stringify({inline_keyboard:[[{text:'▶️ Open live view',url:new URL('index.html#mon='+code,location.href).href}]]}));return centralTgRequest('sendPhoto',f)}
+async function centralTestPhoto(){const a=alertCfg();if(!a.token||!a.chat){$('alertStatus').textContent='❌ Enter Bot Token and Chat ID, then save.';return}try{const c=document.createElement('canvas');c.width=960;c.height=540;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,960,540);g.addColorStop(0,'#ff7a5c');g.addColorStop(1,'#ff4d8d');x.fillStyle=g;x.fillRect(0,0,960,540);x.fillStyle='#fff';x.font='bold 54px sans-serif';x.fillText('CCTV DASHBOARD TEST',48,250);x.font='30px sans-serif';x.fillText(new Date().toLocaleString(),48,310);const b=await new Promise((r,j)=>c.toBlob(v=>v?r(v):j(new Error('JPEG creation failed')),'image/jpeg',.85));await centralTgPhoto(b,'📷 <b>CCTV central dashboard test photo</b>');$('alertStatus').textContent='✅ Test photo sent. Check Telegram.'}catch(e){$('alertStatus').textContent='❌ '+e.message}}
+async function clearEvents(){if(!confirm('Delete all saved event history?'))return;try{await eventOp('readwrite',s=>s.clear());renderEvents();toast('Event history cleared')}catch(e){toast('Could not clear history: '+e.message)}}
+
 /* keep everything alive */
 setInterval(()=>cams.forEach(c=>{if(c.live&&Date.now()-c.lastSt>25000){c.live=false;setSt(c,'Reconnecting…',false);connectCam(c)}}),5000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){wk();cams.forEach(c=>c.v.play&&c.v.play().catch(()=>{}))}});
