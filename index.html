@@ -36,7 +36,7 @@ input.tx:focus{border-color:var(--ac)}
 video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v4</small></span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v5</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
 <button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button></div></div>
 
@@ -77,7 +77,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const VER='v4',$=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v5',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
@@ -121,24 +121,53 @@ async function startCamera(){
   pin=c.slice(6);$('ccode').textContent=c.slice(0,6)+'-'+pin;
   try{as=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){toast('No microphone: video only')}
   try{await openVideo()}catch(e){$('cst').textContent='Camera error: '+e.message;return}
-  peerC=new Peer(PRE+c.slice(0,6),{config:ICE});
-  peerC.on('open',()=>$('cst').textContent='✅ Ready — waiting for monitor');
-  peerC.on('disconnected',()=>peerC.reconnect());
-  peerC.on('error',e=>$('cst').textContent='Error: '+e.type);
-  peerC.on('call',call=>{
+  makePeer();
+  setInterval(sendStatus,3000);detect();setTimeout(function f(){ac&&ac.state=='running'?blk(true):setTimeout(f,3000)},10000);
+  const wk=async()=>{try{if(!wl||wl.released)wl=await navigator.wakeLock.request('screen')}catch(e){}};wk();setInterval(wk,20000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){wk();watch()}});
+  window.addEventListener('online',()=>setTimeout(watch,1000));
+  setInterval(watch,8000);
+}
+/* self-healing camera peer: always comes back by itself */
+let lastOk=Date.now(),mkT;
+const camStatus=()=>$('cst').textContent=calls.length?'🟢 Monitor connected':'✅ Ready — waiting for monitor';
+function makePeer(){
+  clearTimeout(mkT);
+  const old=peerC;peerC=null;try{old&&old.destroy()}catch(e){}
+  const me=peerC=new Peer(PRE+localStorage.cc.slice(0,6),{config:ICE});
+  const again=ms=>{clearTimeout(mkT);mkT=setTimeout(()=>{if(me===peerC)makePeer()},ms)};
+  me.on('open',()=>{lastOk=Date.now();camStatus()});
+  me.on('disconnected',()=>{if(me.destroyed)return;$('cst').textContent='⚠ Reconnecting to server…';setTimeout(()=>{try{me.reconnect()}catch(e){}},1500);setTimeout(()=>{if(me===peerC&&me.disconnected)makePeer()},8000)});
+  me.on('close',()=>again(2000));
+  me.on('error',e=>{$('cst').textContent='Error: '+e.type+' — retrying';again(e.type=='unavailable-id'?6000:3000)});
+  me.on('call',call=>{
     if((call.metadata||{}).pin!=pin)return call.close();
     call.answer(cstream);calls.push(call);applyBr(call);
     call.on('stream',s=>{const a=$('ta');a.srcObject=new MediaStream(s.getAudioTracks());a.play().catch(()=>{})});
-    const gone=()=>{calls=calls.filter(x=>x!=call);$('cst').textContent=calls.length?'🟢 Monitor connected':'✅ Ready — waiting for monitor'};
-    call.on('close',gone);call.on('error',gone);$('cst').textContent='🟢 Monitor connected';
+    const gone=()=>{calls=calls.filter(x=>x!=call);camStatus()};
+    call.on('close',gone);call.on('error',gone);camStatus();
   });
-  peerC.on('connection',cn=>{
+  me.on('connection',cn=>{
     if((cn.metadata||{}).pin!=pin)return cn.close();
-    cn.on('open',()=>{conns.push(cn);sendStatus()});cn.on('data',cmd);cn.on('close',()=>conns=conns.filter(x=>x!=cn));
+    cn.on('open',()=>{conns.push(cn);sendStatus()});cn.on('data',cmd);cn.on('close',()=>conns=conns.filter(x=>x!=cn));cn.on('error',()=>conns=conns.filter(x=>x!=cn));
   });
-  setInterval(sendStatus,3000);detect();setTimeout(function f(){ac&&ac.state=='running'?blk(true):setTimeout(f,3000)},10000);
-  const wk=async()=>{try{wl=await navigator.wakeLock.request('screen')}catch(e){}};wk();
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)wk()});
+}
+let badSince=0;
+async function watch(){
+  /* drop dead calls/conns */
+  calls=calls.filter(c=>{const s=c.peerConnection&&c.peerConnection.iceConnectionState;return s&&s!='closed'&&s!='failed'});
+  conns=conns.filter(c=>c.open);
+  camStatus();
+  /* camera/mic track died (phone slept, other app took camera) → reopen */
+  const t=vs&&vs.getVideoTracks()[0];
+  if(!t||t.readyState=='ended'){try{await openVideo()}catch(e){}}
+  if(as&&as.getAudioTracks()[0]&&as.getAudioTracks()[0].readyState=='ended'){try{as=await navigator.mediaDevices.getUserMedia({audio:true});await openVideo()}catch(e){}}
+  /* signalling server link */
+  const bad=!peerC||peerC.destroyed||peerC.disconnected||!peerC.open;
+  if(bad){badSince=badSince||Date.now();
+    if(!peerC||peerC.destroyed)makePeer();else if(peerC.disconnected)try{peerC.reconnect()}catch(e){}
+    if(Date.now()-badSince>120000)location.reload();   /* last resort: restart page, role is remembered */
+  }else badSince=0;
 }
 
 /* ================= MONITOR ================= */
@@ -147,14 +176,14 @@ $('code').value=localStorage.mc||'';
 const st=t=>$('stt').textContent=t,send=m=>dc&&dc.open&&dc.send(m);
 function connect(){const raw=$('code').value.replace(/\D/g,'');if(raw.length!=12)return toast('Code must be 12 digits');localStorage.mc=raw;want=true;start(raw)}
 function start(raw){
-  clearTimeout(toT);$('cp').style.display='none';st('Connecting…');
+  clearTimeout(toT);toT=0;startedAt=Date.now();$('cp').style.display='none';st('Connecting…');
   try{ctx=ctx||new(window.AudioContext||window.webkitAudioContext)();ctx.resume();dest=dest||ctx.createMediaStreamDestination();silent=dest.stream.getAudioTracks()[0]}catch(e){}
   peerM&&peerM.destroy();peerM=new Peer({config:ICE});
   peerM.on('open',()=>{
     const cv=document.createElement('canvas');cv.width=cv.height=16;cv.getContext('2d').fillRect(0,0,16,16);
     const o=cv.captureStream(1);silent&&o.addTrack(silent);
     const id=PRE+raw.slice(0,6),meta={pin:raw.slice(6)};
-    dc=peerM.connect(id,{metadata:meta,reliable:true});dc.on('data',onSt);dc.on('open',()=>send({c:'mo',v:mo}));
+    openDC(id,meta,peerM);
     call=peerM.call(id,o,{metadata:meta});
     call.on('stream',rs=>{
       const v=$('rv');v.srcObject=rs;v.muted=false;
@@ -164,14 +193,38 @@ function start(raw){
     call.on('close',lost);call.on('error',lost);
     const pc=call.peerConnection;
     pc.oniceconnectionstatechange=()=>{const s=pc.iceConnectionState;if(s=='failed'||s=='closed')lost();if(s=='disconnected')setTimeout(()=>{const x=pc.iceConnectionState;if(x!='connected'&&x!='completed')lost()},6000)};
-    setTimeout(()=>{if(!$('rv').srcObject)lost()},12000);stSeen=0;setTimeout(()=>{if(!stSeen&&$('rv').srcObject)toast('Controls not connected: reload the camera page')},9000);
+    setTimeout(()=>{if(!$('rv').srcObject)lost()},12000);stSeen=0;lastSt=Date.now();
   });
+  peerM.on('disconnected',()=>{try{peerM.reconnect()}catch(e){}});
   peerM.on('error',e=>{st('Error: '+e.type);lost()});
 }
-function lost(){if(!want)return;st('Reconnecting…');$('rv').srcObject=null;clearTimeout(toT);toT=setTimeout(()=>start(localStorage.mc),3000)}
+/* control channel: retries by itself until it works */
+let lastSt=0,dcTry=0,startedAt=0;
+function openDC(id,meta,me){
+  if(me!==peerM||!want)return;
+  try{dc&&dc.close()}catch(e){}
+  const d=dc=peerM.connect(id,{metadata:meta,reliable:true});
+  const retry=()=>{if(dc===d)setTimeout(()=>openDC(id,meta,me),2000+Math.min(dcTry++,5)*1000)};
+  d.on('data',onSt);
+  d.on('open',()=>{dcTry=0;lastSt=Date.now();send({c:'mo',v:mo})});
+  d.on('close',retry);d.on('error',retry);
+  setTimeout(()=>{if(dc===d&&!d.open){try{d.close()}catch(e){}retry()}},8000);
+}
+/* watchdog: video lost, or no status for 10s → fix automatically */
+setInterval(()=>{
+  if(!want||!peerM)return;
+  const raw=localStorage.mc,live=$('rv').srcObject;
+  if(!live){if(!toT&&Date.now()-startedAt>16000)lost();return}
+  const pcs=call&&call.peerConnection&&call.peerConnection.iceConnectionState;
+  if(pcs=='failed'||pcs=='closed'){lost();return}
+  if(Date.now()-lastSt>10000&&peerM.open){lastSt=Date.now();st('Reconnecting controls…');openDC(PRE+raw.slice(0,6),{pin:raw.slice(6)},peerM)}
+},4000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&want){const v=$('rv');v.play&&v.play().catch(()=>{});lastSt=0}});
+window.addEventListener('online',()=>{if(want)setTimeout(()=>start(localStorage.mc),1500)});
+function lost(){if(!want)return;st('Reconnecting…');$('rv').srcObject=null;clearTimeout(toT);toT=setTimeout(()=>{toT=0;start(localStorage.mc)},3000)}
 function back(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;show('home')}
 function chg(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;st('');$('cp').style.display='block'}
-function onSt(d){if(d.type=='mo')return alarm(d);if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;camAu=d.au;stSeen=1;if(d.ver!=VER)st('⚠ Camera phone has an old version: reload its page');q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
+function onSt(d){if(d.type=='mo')return alarm(d);if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;camAu=d.au;stSeen=1;lastSt=Date.now();if($('stt').textContent.startsWith('Reconnecting controls'))st('🟢 Live');if(d.ver!=VER)st('⚠ Camera phone has an old version: reload its page');q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
 setInterval(()=>$('ts').textContent=new Date(Date.now()+off).toLocaleString('sv-SE'),1000);
 const ui=()=>{$('mi').textContent=muted?'🔇':'🔊';$('bMute').classList.toggle('on',muted)};
 function unm(){muted=false;$('rv').muted=false;$('rv').play();$('snd').style.display='none';ui()}
