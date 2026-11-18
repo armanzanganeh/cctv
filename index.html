@@ -1,147 +1,218 @@
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>دوربین مدار بسته</title>
+<!DOCTYPE html><html lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CCTV</title>
 <style>
-  *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,Segoe UI,Tahoma,sans-serif;background:#111;color:#fff;min-height:100vh}
-  .page{display:none;padding:20px;max-width:500px;margin:auto}
-  .page.on{display:block}
-  h1{font-size:22px;text-align:center}
-  button{width:100%;padding:16px;margin:8px 0;font-size:17px;border:0;border-radius:12px;background:#ff7a5c;color:#fff}
-  button.gray{background:#333}
-  input{width:100%;padding:16px;font-size:24px;text-align:center;border-radius:12px;border:0;margin:8px 0;letter-spacing:6px}
-  video{width:100%;background:#000;border-radius:12px;margin-top:10px}
-  .code{font-size:40px;text-align:center;letter-spacing:8px;background:#222;border-radius:12px;padding:14px;margin:10px 0}
-  .row{display:flex;gap:8px}
-  .row button{font-size:15px;padding:12px}
-  #status,#cstatus{text-align:center;color:#aaa;margin:8px 0}
-</style>
-</head>
-<body>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{margin:0;font-family:-apple-system,Segoe UI,Tahoma,sans-serif;background:#fff;color:#222}
+.pg{display:none}.pg.on{display:block}
+header{background:#ff7a5c;color:#fff;display:flex;align-items:center;gap:14px;padding:14px;padding-top:max(14px,env(safe-area-inset-top));font-size:20px;font-weight:600}
+header .t{flex:1}header b{font-size:24px;font-weight:400;cursor:pointer}
+.box{padding:20px;max-width:480px;margin:auto;text-align:center}
+.btn{width:100%;padding:16px;margin:8px 0;font-size:17px;border:0;border-radius:12px;background:#ff7a5c;color:#fff}.btn.g{background:#eee;color:#333}
+input.tx{width:100%;padding:14px;font-size:22px;text-align:center;border:1px solid #ccc;border-radius:12px;letter-spacing:2px;margin:8px 0}
+#vw{position:relative;background:#000;overflow:hidden;aspect-ratio:16/10;max-width:900px;margin:auto}
+#vw.fs{position:fixed;inset:0;z-index:50;aspect-ratio:auto;max-width:none}
+#rv{width:100%;height:100%;object-fit:contain;transform-origin:center}
+.ov{position:absolute;color:#fff;font:600 13px monospace;text-shadow:0 0 3px #000;pointer-events:none}
+#zw{position:absolute;left:8px;top:40px;width:34px;height:150px}#zw input{position:absolute;width:150px;height:34px;left:-58px;top:58px;transform:rotate(-90deg)}
+#snd{display:none;position:absolute;inset:auto 0 40% 0;margin:auto;width:max-content;background:#000a;color:#fff;padding:10px 16px;border-radius:20px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:12px;max-width:900px;margin:auto}
+.it{text-align:center;font-size:12px;color:#999;padding:10px 0;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.it i{display:block;font-style:normal;font-size:28px;color:#000;margin-bottom:4px;font-weight:700}.it.on{color:#ff7a5c}
+#colp{display:none;padding:10px 20px;max-width:900px;margin:auto}#colp label{display:block;margin:6px 0}#colp input[type=range]{width:100%}
+#gl{display:none;position:fixed;inset:0;background:#fff;z-index:99;overflow:auto}.gi{padding:10px;border-bottom:1px solid #eee}.gi img,.gi video{width:100%;max-height:50vh;object-fit:contain;background:#000}.gi button{margin:4px 4px 0 0;padding:8px 12px}
+#toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:20px;opacity:0;transition:.3s;z-index:200;pointer-events:none}
+#dim{display:none;position:fixed;inset:0;background:#000;color:#555;z-index:60;align-items:center;justify-content:center}
+video.pv{width:100%;max-width:500px;border-radius:12px;background:#000}
+</style></head><body>
 
-<div id="home" class="page on">
-  <h1>📹 دوربین مدار بسته</h1>
-  <button onclick="startCamera()">این گوشی «دوربین» است</button>
-  <button class="gray" onclick="show('monitor')">این گوشی «مانیتور» است</button>
-</div>
+<div id="home" class="pg on"><header><span class="t">📹 CCTV</span></header><div class="box">
+<button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
+<button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button></div></div>
 
-<div id="camera" class="page">
-  <h1>حالت دوربین</h1>
-  <div>کد این دوربین (توی مانیتور وارد کن):</div>
-  <div class="code" id="code">------</div>
-  <div id="cstatus">در حال راه‌اندازی...</div>
-  <video id="preview" autoplay playsinline muted></video>
-  <div class="row">
-    <button class="gray" onclick="switchCam()">🔄 چرخش دوربین</button>
-    <button class="gray" onclick="toggleTorch()">🔦 فلش</button>
-  </div>
-  <p style="color:#888;font-size:13px">صفحه را باز و گوشی را به شارژر وصل بگذار. صفحه خودکار خاموش نمی‌شود.</p>
-</div>
+<div id="cam" class="pg"><header><span class="t">Camera</span><span id="cbat" style="font-size:16px"></span></header><div class="box">
+<div>Camera code:</div><div id="ccode" style="font-size:30px;letter-spacing:3px;background:#f3f3f3;border-radius:12px;padding:12px;margin:8px 0">------</div>
+<div id="cst" style="color:#666;margin:8px 0">...</div>
+<video id="pv" class="pv" autoplay playsinline muted></video><audio id="ta" autoplay playsinline></audio>
+<button class="btn g" onclick="$('dim').style.display='flex'">🌑 Black screen (save battery)</button>
+<button class="btn g" onclick="localStorage.removeItem('cc');location.reload()">🔑 New code</button></div>
+<div id="dim" onclick="this.style.display='none'">tap to wake</div></div>
 
-<div id="monitor" class="page">
-  <h1>حالت مانیتور</h1>
-  <input id="codeInput" inputmode="numeric" maxlength="6" placeholder="کد ۶ رقمی">
-  <button onclick="connect()">اتصال</button>
-  <div id="status"></div>
-  <video id="remote" autoplay playsinline muted></video>
-  <div class="row">
-    <button class="gray" id="muteBtn" onclick="toggleMute()">🔇 صدا</button>
-    <button class="gray" onclick="capture()">📸 عکس</button>
-    <button class="gray" onclick="fs()">⛶ تمام‌صفحه</button>
-  </div>
-</div>
+<div id="mon" class="pg"><header><b onclick="back()">‹</b><span class="t">Monitor</span><b onclick="gal()">🎞</b><b onclick="chg()">⚙</b></header>
+<div id="cp" class="box" style="display:none"><input id="code" class="tx" inputmode="numeric" placeholder="123456-123456"><button class="btn" onclick="connect()">Connect</button></div>
+<div id="vw"><video id="rv" autoplay playsinline muted></video>
+<div class="ov" id="qt" style="left:10px;top:8px">HD</div><div class="ov" id="bat" style="right:10px;top:8px"></div>
+<div class="ov" id="ts" style="left:0;right:0;top:8px;text-align:center"></div><div class="ov" id="stt" style="left:10px;bottom:8px"></div>
+<div class="ov" id="rec" style="display:none;left:0;right:0;top:28px;text-align:center;color:#f44"></div>
+<div id="zw"><input type="range" id="zm" min="1" max="4" step="0.1" value="1"></div>
+<div id="snd" onclick="unm()">🔇 Tap for sound</div>
+<div class="ov" style="right:10px;bottom:6px;font-size:24px;pointer-events:auto" onclick="fs()">⤢</div></div>
+<div class="grid">
+<div class="it" onclick="qual()"><i id="qi">HD</i>Quality</div>
+<div class="it" onclick="cap()"><i>📸</i>Capture</div>
+<div class="it" id="bRec" onclick="rec()"><i>🎥</i>Records</div>
+<div class="it" id="bTalk" oncontextmenu="return false"><i>🎙</i>Hold to Talk</div>
+<div class="it" id="bMute" onclick="mut()"><i id="mi">🔊</i>Mute</div>
+<div class="it" id="bNv" onclick="nvt()"><i>🌙</i>Night Vision</div>
+<div class="it" onclick="send({c:'sw'})"><i>🔄</i>Switch</div>
+<div class="it" id="bFl" onclick="flt()"><i>⚡</i>Flash</div>
+<div class="it" onclick="$('colp').style.display=$('colp').style.display=='block'?'none':'block'"><i>🎨</i>Color</div></div>
+<div id="colp"><label>Brightness<input type="range" id="cb" min="0.4" max="2.5" step="0.05" value="1"></label>
+<label>Contrast<input type="range" id="cc" min="0.4" max="2.5" step="0.05" value="1"></label>
+<label>Saturation<input type="range" id="cs" min="0" max="3" step="0.05" value="1"></label>
+<label><input type="checkbox" id="cg"> Black &amp; white</label><button class="btn g" onclick="colReset()">Reset</button></div></div>
+
+<div id="gl"><header><b onclick="$('gl').style.display='none'">‹</b><span class="t">Recordings &amp; Photos</span></header><div id="gb"></div></div>
+<div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const PREFIX = "armancctv-";
-function show(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.getElementById(id).classList.add('on');}
-const $ = id => document.getElementById(id);
+const $=id=>document.getElementById(id),PRE="armancctv-";
+const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
+const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
+const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
+const rnd=n=>String(Math.floor(Math.random()*10**n)).padStart(n,'0');
 
-/* ---------- CAMERA ---------- */
-let stream, facing = "environment", peerCam, wakeLock;
-
+/* ================= CAMERA ================= */
+const RES={SD:[640,360,6e5],HD:[1280,720,1.5e6],FHD:[1920,1080,3e6]};
+let vs,as,cstream,facing='environment',res='HD',peerC,calls=[],conns=[],pin,wl;
+function applyBr(c){setTimeout(()=>{try{c.peerConnection.getSenders().forEach(async s=>{if(s.track&&s.track.kind=='video')try{const p=s.getParameters();if(!p.encodings||!p.encodings.length)p.encodings=[{}];p.encodings[0].maxBitrate=RES[res][2];await s.setParameters(p)}catch(e){}})}catch(e){}},1500)}
+async function openVideo(){
+  vs&&vs.getTracks().forEach(t=>t.stop());
+  const [w,h]=RES[res];
+  vs=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:w},height:{ideal:h},frameRate:{ideal:30}}});
+  $('pv').srcObject=vs;
+  const vt=vs.getVideoTracks()[0];
+  cstream=new MediaStream([vt,...(as?as.getAudioTracks():[])]);
+  calls.forEach(c=>{c.peerConnection.getSenders().forEach(s=>{if(s.track&&s.track.kind=='video')s.replaceTrack(vt)});applyBr(c)});
+  sendStatus();
+}
+const caps=()=>{const t=vs&&vs.getVideoTracks()[0];return t&&t.getCapabilities?t.getCapabilities():{}};
+async function sendStatus(){
+  let b=null;try{b=Math.round((await navigator.getBattery()).level*100)}catch(e){}
+  const c=caps(),m={type:'st',t:Date.now(),bat:b,res,torch:!!c.torch,zoom:c.zoom?[c.zoom.min,c.zoom.max]:null};
+  conns.forEach(x=>x.open&&x.send(m));$('cbat').textContent=b==null?'':'🔋'+b+'%';
+}
+async function cmd(d){
+  const t=vs.getVideoTracks()[0],ap=a=>t.applyConstraints({advanced:[a]}).catch(()=>{});
+  if(d.c=='q'){res=d.v;await openVideo()}
+  else if(d.c=='sw'){facing=facing=='environment'?'user':'environment';await openVideo()}
+  else if(d.c=='fl')ap({torch:d.v});
+  else if(d.c=='zm')ap({zoom:d.v});
+  else if(d.c=='nv'){const c=caps();ap({exposureCompensation:d.v&&c.exposureCompensation?c.exposureCompensation.max:0})}
+  sendStatus();
+}
 async function startCamera(){
-  show('camera');
-  let code = localStorage.getItem('camcode');
-  if(!code){ code = String(Math.floor(100000+Math.random()*900000)); localStorage.setItem('camcode',code); }
-  $('code').textContent = code;
-  try{
-    await openStream();
-  }catch(e){ $('cstatus').textContent = "دسترسی به دوربین/میکروفون داده نشد: "+e.message; return; }
-  try{ wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
-  document.addEventListener('visibilitychange',async()=>{ if(!document.hidden){ try{wakeLock=await navigator.wakeLock.request('screen');}catch(e){} }});
-  peerCam = new Peer(PREFIX+code);
-  peerCam.on('open',()=>$('cstatus').textContent="✅ آماده. منتظر مانیتور...");
-  peerCam.on('error',e=>$('cstatus').textContent="خطا: "+e.type+" (اگه ID taken بود، صفحه رو ببند و دوباره باز کن)");
-  peerCam.on('call',call=>{
-    call.answer(stream);
-    $('cstatus').textContent="🟢 مانیتور وصل شد";
-    call.on('close',()=>$('cstatus').textContent="✅ آماده. منتظر مانیتور...");
+  show('cam');
+  let c=localStorage.cc;if(!c||c.length!=12){c=rnd(6)+rnd(6);localStorage.cc=c}
+  pin=c.slice(6);$('ccode').textContent=c.slice(0,6)+'-'+pin;
+  try{as=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){toast('No microphone: video only')}
+  try{await openVideo()}catch(e){$('cst').textContent='Camera error: '+e.message;return}
+  peerC=new Peer(PRE+c.slice(0,6),{config:ICE});
+  peerC.on('open',()=>$('cst').textContent='✅ Ready — waiting for monitor');
+  peerC.on('disconnected',()=>peerC.reconnect());
+  peerC.on('error',e=>$('cst').textContent='Error: '+e.type);
+  peerC.on('call',call=>{
+    if((call.metadata||{}).pin!=pin)return call.close();
+    call.answer(cstream);calls.push(call);applyBr(call);
+    call.on('stream',s=>{const a=$('ta');a.srcObject=new MediaStream(s.getAudioTracks());a.play().catch(()=>{})});
+    const gone=()=>{calls=calls.filter(x=>x!=call);$('cst').textContent=calls.length?'🟢 Monitor connected':'✅ Ready — waiting for monitor'};
+    call.on('close',gone);call.on('error',gone);$('cst').textContent='🟢 Monitor connected';
   });
-}
-async function openStream(){
-  if(stream) stream.getTracks().forEach(t=>t.stop());
-  stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true});
-  $('preview').srcObject = stream;
-}
-async function switchCam(){
-  facing = facing==="environment"?"user":"environment";
-  await openStream();
-  if(peerCam){ // update outgoing tracks for connected calls
-    Object.values(peerCam.connections).flat().forEach(c=>{
-      const s = c.peerConnection.getSenders().find(x=>x.track&&x.track.kind==='video');
-      if(s) s.replaceTrack(stream.getVideoTracks()[0]);
-    });
-  }
-}
-let torchOn=false;
-async function toggleTorch(){
-  const track = stream.getVideoTracks()[0];
-  torchOn=!torchOn;
-  try{ await track.applyConstraints({advanced:[{torch:torchOn}]}); }
-  catch(e){ alert("این دوربین فلش را پشتیبانی نمی‌کند (دوربین پشت را امتحان کن)"); torchOn=false; }
+  peerC.on('connection',cn=>{
+    if((cn.metadata||{}).pin!=pin)return cn.close();
+    cn.on('open',()=>{conns.push(cn);sendStatus()});cn.on('data',cmd);cn.on('close',()=>conns=conns.filter(x=>x!=cn));
+  });
+  setInterval(sendStatus,3000);
+  const wk=async()=>{try{wl=await navigator.wakeLock.request('screen')}catch(e){}};wk();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)wk()});
 }
 
-/* ---------- MONITOR ---------- */
-let peerMon, muted=true;
-function connect(){
-  const code = $('codeInput').value.trim();
-  if(code.length!==6){ $('status').textContent="کد باید ۶ رقم باشد"; return; }
-  $('status').textContent="در حال اتصال...";
-  if(peerMon) peerMon.destroy();
-  peerMon = new Peer();
-  peerMon.on('open',()=>{
-    const c = document.createElement('canvas'); c.width=c.height=16;
-    c.getContext('2d').fillRect(0,0,16,16);
-    const dummy = c.captureStream(1);
-    const call = peerMon.call(PREFIX+code, dummy);
+/* ================= MONITOR ================= */
+let peerM,call,dc,mic,ctx,dest,silent,want=false,off=0,muted=false,talking=false,recorder,chunks=[],rt,q='HD',nv=false,fl=false,zmCap=null,toT;
+$('code').value=localStorage.mc||'';
+const st=t=>$('stt').textContent=t,send=m=>dc&&dc.open&&dc.send(m);
+function connect(){const raw=$('code').value.replace(/\D/g,'');if(raw.length!=12)return toast('Code must be 12 digits');localStorage.mc=raw;want=true;start(raw)}
+function start(raw){
+  clearTimeout(toT);$('cp').style.display='none';st('Connecting…');
+  try{ctx=ctx||new(window.AudioContext||window.webkitAudioContext)();ctx.resume();dest=dest||ctx.createMediaStreamDestination();silent=dest.stream.getAudioTracks()[0]}catch(e){}
+  peerM&&peerM.destroy();peerM=new Peer({config:ICE});
+  peerM.on('open',()=>{
+    const cv=document.createElement('canvas');cv.width=cv.height=16;cv.getContext('2d').fillRect(0,0,16,16);
+    const o=cv.captureStream(1);silent&&o.addTrack(silent);
+    const id=PRE+raw.slice(0,6),meta={pin:raw.slice(6)};
+    dc=peerM.connect(id,{metadata:meta,reliable:true});dc.on('data',onSt);
+    call=peerM.call(id,o,{metadata:meta});
     call.on('stream',rs=>{
-      const v=$('remote'); v.srcObject=rs; v.play().catch(()=>{});
-      $('status').textContent="🟢 وصل شد";
+      const v=$('rv');v.srcObject=rs;v.muted=false;
+      v.play().then(()=>{muted=false;ui()}).catch(()=>{v.muted=true;muted=true;v.play();$('snd').style.display='block';ui()});
+      st(rs.getAudioTracks().length?'🟢 Live':'🟢 Live (no audio from camera)');
     });
-    call.on('close',()=>$('status').textContent="قطع شد");
-    setTimeout(()=>{ if(!$('remote').srcObject) $('status').textContent="جواب نیومد. کد درسته؟ دوربین روشنه؟"; },10000);
+    call.on('close',lost);call.on('error',lost);
+    const pc=call.peerConnection;
+    pc.oniceconnectionstatechange=()=>{const s=pc.iceConnectionState;if(s=='failed'||s=='closed')lost();if(s=='disconnected')setTimeout(()=>{const x=pc.iceConnectionState;if(x!='connected'&&x!='completed')lost()},6000)};
+    setTimeout(()=>{if(!$('rv').srcObject)lost()},12000);
   });
-  peerMon.on('error',e=>$('status').textContent="خطا: "+e.type);
+  peerM.on('error',e=>{st('Error: '+e.type);lost()});
 }
-function toggleMute(){
-  muted=!muted; $('remote').muted=muted;
-  $('muteBtn').textContent = muted?"🔇 صدا":"🔊 صدا";
+function lost(){if(!want)return;st('Reconnecting…');$('rv').srcObject=null;clearTimeout(toT);toT=setTimeout(()=>start(localStorage.mc),3000)}
+function back(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;show('home')}
+function chg(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;st('');$('cp').style.display='block'}
+function onSt(d){if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
+setInterval(()=>$('ts').textContent=new Date(Date.now()+off).toLocaleString('sv-SE'),1000);
+const ui=()=>{$('mi').textContent=muted?'🔇':'🔊';$('bMute').classList.toggle('on',muted)};
+function unm(){muted=false;$('rv').muted=false;$('rv').play();$('snd').style.display='none';ui()}
+function mut(){muted=!muted;$('rv').muted=muted;if(!muted){$('rv').play();$('snd').style.display='none'}ui()}
+function qual(){const n={SD:'HD',HD:'FHD',FHD:'SD'}[q]||'HD';send({c:'q',v:n});toast('Quality: '+n)}
+function flt(){fl=!fl;$('bFl').classList.toggle('on',fl);send({c:'fl',v:fl})}
+function nvt(){nv=!nv;$('bNv').classList.toggle('on',nv);send({c:'nv',v:nv});applyF()}
+function applyF(){const b=+$('cb').value,c=+$('cc').value,s=+$('cs').value,g=$('cg').checked||nv;
+  $('rv').style.filter=`brightness(${b*(nv?2:1)}) contrast(${c*(nv?1.3:1)}) saturate(${nv?0:s})${g?' grayscale(1)':''}`}
+['cb','cc','cs','cg'].forEach(i=>$(i).oninput=applyF);
+function colReset(){$('cb').value=$('cc').value=$('cs').value=1;$('cg').checked=false;applyF()}
+$('zm').oninput=e=>{const z=+e.target.value;
+  if(zmCap){send({c:'zm',v:Math.min(zmCap[1],zmCap[0]+(z-1)*(zmCap[1]-zmCap[0])/3)});$('rv').style.transform=''}
+  else $('rv').style.transform=`scale(${z})`};
+function fs(){const w=$('vw');if(w.classList.contains('fs')){w.classList.remove('fs');document.fullscreenElement&&document.exitFullscreen();return}
+  w.classList.add('fs');w.requestFullscreen&&w.requestFullscreen().catch(()=>{})}
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)$('vw').classList.remove('fs')});
+/* talk */
+async function tS(e){e.preventDefault();if(talking||!call)return;talking=true;$('bTalk').classList.add('on');$('rv').muted=true;
+  try{const m=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+    if(!talking){m.getTracks().forEach(t=>t.stop());return}mic=m;
+    const s=call.peerConnection.getSenders().find(s=>s.track&&s.track.kind=='audio');
+    s?await s.replaceTrack(m.getAudioTracks()[0]):toast('Talk not available')}catch(x){toast('Microphone denied');tE()}}
+function tE(){if(!talking)return;talking=false;$('bTalk').classList.remove('on');
+  const s=call&&call.peerConnection.getSenders().find(s=>s.track&&s.track.kind=='audio');s&&silent&&s.replaceTrack(silent);
+  mic&&mic.getTracks().forEach(t=>t.stop());mic=null;$('rv').muted=muted}
+$('bTalk').addEventListener('pointerdown',tS);['pointerup','pointerleave','pointercancel'].forEach(n=>$('bTalk').addEventListener(n,tE));
+/* storage */
+const db=new Promise(r=>{const o=indexedDB.open('cctv',1);o.onupgradeneeded=()=>o.result.createObjectStore('f',{keyPath:'id',autoIncrement:true});o.onsuccess=()=>r(o.result);o.onerror=()=>r(null)});
+const tx=async(m,f)=>{const d=await db;return new Promise(r=>{const t=d.transaction('f',m),q=f(t.objectStore('f'));t.oncomplete=()=>r(q&&q.result)})};
+async function save(kind,blob){await tx('readwrite',s=>s.add({kind,blob,time:Date.now(),type:blob.type}));toast('Saved to gallery ✔')}
+function cap(){const v=$('rv');if(!v.videoWidth)return;const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;const x=c.getContext('2d');
+  try{x.filter=v.style.filter||'none'}catch(e){}x.drawImage(v,0,0);x.filter='none';x.fillStyle='#fff';x.font=Math.round(c.height/30)+'px monospace';x.fillText($('ts').textContent,10,c.height/30+8);
+  c.toBlob(b=>save('photo',b),'image/jpeg',.92)}
+function rec(){
+  if(recorder){recorder.stop();return}
+  const s=$('rv').srcObject;if(!s)return;
+  const mt=['video/webm;codecs=vp9,opus','video/webm','video/mp4'].find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t));
+  if(!mt)return toast('Recording not supported here');
+  chunks=[];recorder=new MediaRecorder(s,{mimeType:mt});
+  recorder.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  recorder.onstop=()=>{clearInterval(rt);$('rec').style.display='none';$('bRec').classList.remove('on');save('video',new Blob(chunks,{type:mt}));recorder=null};
+  recorder.start(1000);const t0=Date.now();$('rec').style.display='block';$('bRec').classList.add('on');
+  rt=setInterval(()=>$('rec').textContent='● REC '+new Date(Date.now()-t0).toISOString().substr(14,5),500);
 }
-function capture(){
-  const v=$('remote'); if(!v.videoWidth) return;
-  const c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight;
-  c.getContext('2d').drawImage(v,0,0);
-  const a=document.createElement('a'); a.href=c.toDataURL('image/jpeg',0.9);
-  a.download='capture-'+Date.now()+'.jpg'; a.click();
+async function gal(){
+  $('gl').style.display='block';const all=(await tx('readonly',s=>s.getAll()))||[],box=$('gb');box.innerHTML='';
+  all.reverse().forEach(f=>{
+    const u=URL.createObjectURL(f.blob),d=document.createElement('div');d.className='gi';
+    d.innerHTML=(f.kind=='photo'?`<img src="${u}">`:`<video src="${u}" controls playsinline></video>`)+`<div>${new Date(f.time).toLocaleString('sv-SE')}</div>`;
+    const ext=f.type.includes('mp4')?'mp4':f.type.includes('webm')?'webm':'jpg';
+    const b1=document.createElement('button');b1.textContent='⬇ Save / Share';
+    b1.onclick=async()=>{const file=new File([f.blob],'cctv-'+f.time+'.'+ext,{type:f.type});
+      if(navigator.canShare&&navigator.canShare({files:[file]}))try{await navigator.share({files:[file]});return}catch(e){}
+      const a=document.createElement('a');a.href=u;a.download=file.name;a.click()};
+    const b2=document.createElement('button');b2.textContent='🗑 Delete';b2.onclick=async()=>{await tx('readwrite',s=>s.delete(f.id));gal()};
+    d.append(b1,b2);box.append(d)});
+  if(!all.length)box.innerHTML='<p style="padding:20px">Empty</p>';
 }
-function fs(){
-  const v=$('remote');
-  (v.requestFullscreen||v.webkitRequestFullscreen||v.webkitEnterFullscreen).call(v);
-}
-</script>
-</body>
-</html>
+</script></body></html>
