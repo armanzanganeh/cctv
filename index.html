@@ -36,7 +36,7 @@ input.tx:focus{border-color:var(--ac)}
 video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v6</small></span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v7</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
 <button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button></div></div>
 
@@ -78,7 +78,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const VER='v6',$=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v7',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
@@ -183,7 +183,7 @@ async function startCamera(){
   // Start video first. A denied microphone permission must not prevent the camera from opening.
   try{await openVideo()}
   catch(e){camErr=(e.name||'error')+': '+(e.message||'');$('cerr').textContent='⚠ '+camErr;toast(camErr);}
-  try{as=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){toast('Microphone unavailable — video only')}
+  try{as=await navigator.mediaDevices.getUserMedia({audio:true});cstream=new MediaStream([...(vs?vs.getVideoTracks():[]),...as.getAudioTracks()])}catch(e){toast('Microphone unavailable — video only')}
   makePeer();   /* start anyway: the watchdog keeps retrying the camera */
   setInterval(sendStatus,3000);detect();setTimeout(function f(){ac&&ac.state=='running'?blk(true):setTimeout(f,3000)},10000);
   const wk=async()=>{try{if(!wl||wl.released)wl=await navigator.wakeLock.request('screen')}catch(e){}};wk();setInterval(wk,20000);
@@ -383,5 +383,5 @@ function alarm(d){
 function beep(){try{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);g.gain.value=.3;o.frequency.value=880;o.start();o.stop(ctx.currentTime+.4)}catch(e){}}
 function mot(){mo=(mo+1)%4;$('bMo').classList.toggle('on',mo>0);$('bMo').lastChild.textContent='Motion: '+['Off','Low','Med','High'][mo];send({c:'mo',v:mo})}
 function stl(){blkOn=!blkOn;$('bBk').classList.toggle('on',blkOn);send({c:'blk',v:blkOn})}
-// Camera is started only after the user taps the Camera button (browser permission requirement).
+if(localStorage.role=='cam')startCamera();   /* always-on: resume by itself after reload (permission is remembered on https) */
 </script></body></html>
