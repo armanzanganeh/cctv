@@ -42,7 +42,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 #tgm{margin-top:8px;min-height:20px;font-size:14px;word-break:break-word}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v10</small></span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v11</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
 <button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button>
 <button class="btn g" onclick="location.href='multi.html'">🧩 All cameras (multi-view)</button>
@@ -93,13 +93,13 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 <label style="display:block;text-align:left">Minimum time between alerts
 <select id="tgg"><option value="60">1 minute</option><option value="120">2 minutes</option><option value="300">5 minutes</option><option value="600">10 minutes</option></select></label>
 <label style="display:flex;gap:10px;align-items:center;text-align:left;margin:6px 0"><input type="checkbox" id="tgs" style="width:20px;height:20px"> Also alert on loud sound</label>
-<small>Camera phone: sends photo on motion/sound, "camera online / was offline", battery &amp; charger alerts.<br>Monitor phone (optional): tells you if the camera stays unreachable for 2 minutes.</small>
-<button class="btn g" onclick="tgTest()">Send test message</button><button class="btn" onclick="tgSave()">Save</button><button class="btn g" onclick="$('tgp').style.display='none'">Close</button><div id="tgm"></div></div></div>
+<small>These settings are saved on THIS device. Automatic camera-side photo alerts must be configured on each camera phone. You can also use All cameras → Alerts for one central Telegram setup across cameras.<br>Motion alerts require a non-Off sensitivity level.</small>
+<button class="btn g" onclick="tgTest()">Send test message</button><button class="btn g" onclick="tgTestPhoto()">📷 Send test photo</button><button class="btn" onclick="tgSave()">Save</button><button class="btn g" onclick="$('tgp').style.display='none'">Close</button><div id="tgm"></div></div></div>
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const VER='v10',$=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v11',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
@@ -115,17 +115,39 @@ const tgName=()=>(tgCfg().n||'').trim();
 const tgMsg=(title,...lines)=>title+(tgName()?'\n📍 '+esc(tgName()):'')+lines.map(l=>'\n'+l).join('');
 const fmtDur=ms=>{const t=Math.round(ms/1000);return t<60?t+' s':Math.floor(t/60)+' min '+(t%60)+' s'};
 const tgBtn=()=>({inline_keyboard:[[{text:'▶️ Open live view',url:new URL('index.html#mon='+(localStorage.cc||''),location.href).href}]]});
-const tgApi=(m,body)=>{const g=tgCfg();return fetch('https://api.telegram.org/bot'+g.t+'/'+m,body.constructor===FormData?{method:'POST',body}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json())};
-/* returns '' on success, or an error text */
-async function tgSend(text){const g=tgCfg();if(!g.t||!g.c)return 'not configured';
-  try{const j=await tgApi('sendMessage',{chat_id:g.c,text,parse_mode:'HTML',disable_web_page_preview:true});return j.ok?'':(j.description||'error')}catch(e){return 'network error'}}
-async function tgPhoto(blob,caption,btn){const g=tgCfg();if(!g.t||!g.c)return{e:'not configured'};
-  try{const f=new FormData();f.append('chat_id',g.c);f.append('caption',caption);f.append('parse_mode','HTML');f.append('photo',blob,'alert.jpg');if(btn)f.append('reply_markup',JSON.stringify(tgBtn()));
-    const j=await tgApi('sendPhoto',f);return j.ok?{e:'',id:j.result.message_id}:{e:j.description||'error'}}catch(e){return{e:'network error'}}}
-async function tgEdit(id,caption){const g=tgCfg();try{await tgApi('editMessageCaption',{chat_id:g.c,message_id:id,caption,parse_mode:'HTML',reply_markup:tgBtn()})}catch(e){}}
+async function tgApi(m,body){
+  const g=tgCfg();if(!g.t)throw new Error('Bot token is empty');
+  const isForm=typeof FormData!=='undefined'&&body instanceof FormData;
+  let response;
+  try{response=await fetch('https://api.telegram.org/bot'+g.t+'/'+m,isForm?{method:'POST',body}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+  catch(e){throw new Error('Network/CORS error reaching Telegram: '+(e&&e.message||e));}
+  let j;try{j=await response.json()}catch(e){throw new Error('Telegram returned a non-JSON response (HTTP '+response.status+')');}
+  if(!response.ok||!j.ok)throw new Error((j&&j.description)||('Telegram HTTP '+response.status));
+  return j;
+}
+/* Keep Telegram's exact API error so the UI can show the real reason. */
+async function tgSend(text){const g=tgCfg();if(!g.t||!g.c)return 'Bot token or Chat ID is empty';
+  try{await tgApi('sendMessage',{chat_id:g.c,text,parse_mode:'HTML',disable_web_page_preview:true});return ''}catch(e){return e.message||'Telegram request failed'}}
+async function tgPhoto(blob,caption,btn){const g=tgCfg();if(!g.t||!g.c)return{e:'Bot token or Chat ID is empty'};
+  if(!(blob instanceof Blob)||!blob.size)return{e:'The image is empty; the camera could not create a JPEG'};
+  try{const f=new FormData();f.append('chat_id',g.c);f.append('caption',caption);f.append('parse_mode','HTML');f.append('photo',blob,'cctv-alert.jpg');if(btn)f.append('reply_markup',JSON.stringify(tgBtn()));
+    const j=await tgApi('sendPhoto',f);return{e:'',id:j.result.message_id}}catch(e){return{e:e.message||'Telegram sendPhoto failed'}}}
+async function tgEdit(id,caption){const g=tgCfg();try{await tgApi('editMessageCaption',{chat_id:g.c,message_id:id,caption,parse_mode:'HTML',reply_markup:tgBtn()})}catch(e){$('cerr').textContent='Telegram update: '+(e.message||e)}}
 function tgOpen(){const g=tgCfg();$('tgt').value=g.t||'';$('tgc').value=g.c||'';$('tgn').value=g.n||'';$('tgl').value=String(g.l||0);$('tgg').value=String(g.gap||120);$('tgs').checked=!!g.snd;$('tgm').textContent='';$('tgp').style.display='block'}
-function tgSave(){localStorage.tg=JSON.stringify({t:$('tgt').value.trim(),c:$('tgc').value.trim(),n:$('tgn').value.trim(),l:+$('tgl').value,gap:+$('tgg').value,snd:$('tgs').checked});$('tgm').textContent='✅ Saved';setTimeout(()=>$('tgp').style.display='none',700)}
-async function tgTest(){tgSave();$('tgm').textContent='Sending…';const e=await tgSend(tgMsg('✅ <b>Test OK</b>','You will receive alerts here.'));$('tgm').textContent=e?'❌ '+e:'✅ Sent — check Telegram'}
+function tgSave(close=true){localStorage.tg=JSON.stringify({t:$('tgt').value.trim(),c:$('tgc').value.trim(),n:$('tgn').value.trim(),l:+$('tgl').value,gap:+$('tgg').value,snd:$('tgs').checked});$('tgm').textContent='✅ Saved on this device';if(close)setTimeout(()=>$('tgp').style.display='none',500)}
+async function tgTest(){tgSave(false);$('tgm').textContent='Sending test message…';const e=await tgSend(tgMsg('✅ <b>Test OK</b>','Text delivery is working.'));$('tgm').textContent=e?'❌ '+e:'✅ Text sent successfully — check Telegram.'}
+async function tgTestPhoto(){
+  tgSave(false);$('tgm').textContent='Preparing a test image…';
+  try{
+    if(!tgCfg().t||!tgCfg().c)throw new Error('Enter Bot Token and Chat ID first.');
+    const c=document.createElement('canvas');c.width=960;c.height=540;const x=c.getContext('2d');
+    const grad=x.createLinearGradient(0,0,960,540);grad.addColorStop(0,'#ff7a5c');grad.addColorStop(1,'#ff4d8d');x.fillStyle=grad;x.fillRect(0,0,960,540);
+    x.fillStyle='#fff';x.font='bold 54px sans-serif';x.fillText('CCTV TEST PHOTO',54,245);x.font='30px sans-serif';x.fillText(new Date().toLocaleString(),54,305);
+    const blob=await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error('Browser could not create a JPEG image.')),'image/jpeg',.85));
+    $('tgm').textContent='Uploading test photo…';const r=await tgPhoto(blob,'📷 <b>CCTV test photo</b>\nPhoto upload is working.',false);
+    if(r.e)throw new Error(r.e);$('tgm').textContent='✅ Test photo sent successfully — check Telegram.';
+  }catch(e){$('tgm').textContent='❌ '+(e.message||e)}
+}
 /* PWA */
 let instEv=null;
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEv=e;$('inst').style.display='block'});
@@ -214,6 +236,7 @@ async function cmd(d){
   try{
   if(d.c=='mo')moLvl=d.v;
   else if(d.c=='tr')trk=d.v;
+  else if(d.c=='dashcfg'){dashCfg={on:!!(d.v&&d.v.on),level:Math.max(1,Math.min(3,+(d.v&&d.v.level)||1)),snd:!!(d.v&&d.v.snd)};localStorage.dashCfg=JSON.stringify(dashCfg);}
   else if(d.c=='blk')blk(d.v);
   else if(d.c=='siren')siren();
   else if(d.c=='q'){res=d.v;await openVideo()}
@@ -435,7 +458,10 @@ async function gal(){
 }
 
 /* ===== extras ===== */
-let moLvl=0,trk=0,pm=null,lastMo=0,lastTg=0,ev=null,win=[],vSince=0,tgLog=[],tgCapNote=0,an,ac,taps=[];const MOT=[0,.08,.03,.012],MOT_TG=[0,.06,.03,.02];
+let moLvl=0,trk=0,pm=null,lastMo=0,lastTg=0,ev=null,win=[],vSince=0,tgLog=[],tgCapNote=0,an,ac,taps=[];
+let dashCfg=(()=>{try{return Object.assign({on:false,level:1,snd:false},JSON.parse(localStorage.dashCfg||'{}'))}catch(e){return{on:false,level:1,snd:false}}})();
+let dashWin=[],dashEv=null,dashLast=0;
+const MOT=[0,.08,.03,.012],MOT_TG=[0,.06,.03,.02];
 function blk(on){$('dim').style.display=on?'block':'none';if(on)try{document.documentElement.requestFullscreen()}catch(e){}}
 function tap3(){const n=Date.now();taps=taps.filter(t=>n-t<900);taps.push(n);if(taps.length>=3){taps=[];blk(false)}}
 function detect(){
@@ -444,19 +470,31 @@ function detect(){
   setInterval(()=>{$('au').style.display=ac&&ac.state=='running'?'none':'block'},1000);
   document.addEventListener('pointerdown',()=>{ac&&ac.resume();$('ta').play().catch(()=>{})});
   setInterval(()=>{
-    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length,trkA=trk&&conns.length,now=Date.now();
+    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length,trkA=trk&&conns.length,dashA=dashCfg.on&&conns.length,now=Date.now();
     if(ev&&now-ev.last>45000){tgEndEvent(ev);ev=null}      /* event over: quiet for 45 s */
-    if(!tgA&&!monA&&!trkA)return;const v=$('pv');if(!v.videoWidth)return;
+    if(!tgA&&!monA&&!trkA&&!dashA)return;const v=$('pv');if(!v.videoWidth)return;
     x.drawImage(v,0,0,64,36);const d=x.getImageData(0,0,64,36).data,gr=new Uint8Array(2304);let n=0,sx=0,sy=0;
     for(let i=0;i<2304;i++){gr[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(pm&&Math.abs(gr[i]-pm[i])>32){n++;sx+=i%64;sy+=(i/64|0)}}
     const frac=n/2304,still=!pm||now-vSince<5000||frac>.5;   /* camera warm-up, or a lighting jump (not real motion) */
-    pm=gr;if(still){win=[];return}
+    pm=gr;if(still){win=[];dashWin=[];return}
     if(trkA&&n>=14){const m={type:'tr',x:sx/n/64,y:sy/n/36};conns.forEach(k=>k.open&&k.send(m))}
     let peak=0;if(an){an.getByteTimeDomainData(buf);for(const b of buf)peak=Math.max(peak,Math.abs(b-128))}
     /* live alarm on the monitor screen */
     if(monA&&(frac>MOT[moLvl]||peak>70)&&now-lastMo>10000){lastMo=now;const s=document.createElement('canvas');s.width=480;s.height=270;s.getContext('2d').drawImage(v,0,0,480,270);
       const m={type:'mo',why:frac>MOT[moLvl]?'motion':'sound',img:s.toDataURL('image/jpeg',.6),t:now};conns.forEach(k=>k.open&&k.send(m))}
-    /* Telegram: motion must last ~3 s (3 of the last 6 checks), one message per event */
+    /* Central dashboard event feed: confirmed motion/sound is sent to All cameras. */
+    if(dashA){
+      const dashHit=frac>MOT_TG[dashCfg.level]||(dashCfg.snd&&peak>90);
+      dashWin.push(dashHit?1:0);if(dashWin.length>6)dashWin.shift();
+      if(dashEv&&dashHit)dashEv.last=now;
+      if(dashEv&&!dashHit&&now-dashEv.last>45000){conns.forEach(k=>k.open&&k.send({type:'dash_event_end',id:dashEv.id,last:dashEv.last}));dashEv=null;dashWin=[];}
+      if(!dashEv&&dashWin.reduce((a,b)=>a+b,0)>=3&&now-dashLast>10000){
+        dashLast=now;const snap=document.createElement('canvas');snap.width=480;snap.height=270;snap.getContext('2d').drawImage(v,0,0,480,270);
+        const event={type:'dash_event',id:String(now)+'-'+Math.random().toString(36).slice(2,7),camera:localStorage.cc||'',why:frac>MOT_TG[dashCfg.level]?'motion':'sound',t:now,img:snap.toDataURL('image/jpeg',.58)};
+        dashEv={id:event.id,last:now};conns.forEach(k=>k.open&&k.send(event));
+      }
+    }
+    /* Telegram: motion must last ~3 s (3 of the last 6 checks), one message per event. */
     if(!tgA)return;
     const hitT=frac>MOT_TG[g.l],sndT=!!g.snd&&peak>90;
     win.push(hitT||sndT?1:0);if(win.length>6)win.shift();
@@ -472,11 +510,14 @@ async function tgNewEvent(v,why){
   tgLog.push(now);
   const e=ev={t0:now,last:now,why,msg:0,bt:''};
   const s=document.createElement('canvas'),W=Math.min(960,v.videoWidth);s.width=W;s.height=Math.round(W*v.videoHeight/v.videoWidth);
-  s.getContext('2d').drawImage(v,0,0,s.width,s.height);
-  const blob=await new Promise(r=>s.toBlob(r,'image/jpeg',.8));
-  try{const B=await navigator.getBattery();e.bt='🔋 '+Math.round(B.level*100)+'%'}catch(x){}
-  const r=await tgPhoto(blob,tgCap(e,false),true);
-  if(r.e){camErr='Telegram: '+r.e;sendStatus()}else e.msg=r.id;
+  try{
+    s.getContext('2d').drawImage(v,0,0,s.width,s.height);
+    const blob=await new Promise((resolve,reject)=>s.toBlob(b=>b?resolve(b):reject(new Error('Browser could not encode the camera frame as JPEG.')),'image/jpeg',.8));
+    try{const B=await navigator.getBattery();e.bt='🔋 '+Math.round(B.level*100)+'%'}catch(x){}
+    const r=await tgPhoto(blob,tgCap(e,false),true);
+    if(r.e){camErr='Telegram photo failed: '+r.e;ev=null;sendStatus();$('cerr').textContent='⚠ '+camErr}
+    else{e.msg=r.id;camErr='';sendStatus()}
+  }catch(err){camErr='Telegram photo failed: '+(err.message||err);ev=null;sendStatus();$('cerr').textContent='⚠ '+camErr}
 }
 function tgCap(e,done){const T=t=>new Date(t).toLocaleTimeString('sv-SE');
   return (e.why=='sound'?'🔊 <b>Sound detected':'🚨 <b>Motion detected')+(done?' — ended':'')+'</b>'+(tgName()?'\n📍 '+esc(tgName()):'')
