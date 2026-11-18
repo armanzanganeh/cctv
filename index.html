@@ -13,7 +13,7 @@ input.tx{width:100%;padding:16px;font-size:22px;text-align:center;border:1px sol
 input.tx:focus{border-color:var(--ac)}
 #vw{position:relative;background:#000;overflow:hidden;aspect-ratio:16/10;max-width:900px;margin:12px auto;border-radius:20px;box-shadow:0 10px 40px #0008}
 #vw.fs{position:fixed;inset:0;z-index:50;aspect-ratio:auto;max-width:none;border-radius:0;margin:0}
-#rv{width:100%;height:100%;object-fit:contain;transform-origin:center}
+#rv{width:100%;height:100%;object-fit:contain;transform-origin:center;transition:transform .5s ease-out}
 .ov{position:absolute;color:#fff;font:600 13px ui-monospace,monospace;text-shadow:0 0 4px #000;pointer-events:none}
 #qt,#bat{background:#0007;padding:3px 8px;border-radius:8px}
 #zw{position:absolute;left:8px;top:44px;width:34px;height:150px}#zw input{position:absolute;width:150px;height:34px;left:-58px;top:58px;transform:rotate(-90deg);accent-color:var(--ac)}
@@ -42,9 +42,10 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 #tgm{margin-top:8px;min-height:20px;font-size:14px;word-break:break-word}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v8</small></span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v9</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
 <button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button>
+<button class="btn g" onclick="location.href='multi.html'">🧩 All cameras (multi-view)</button>
 <button class="btn g" onclick="tgOpen()">🔔 Telegram alerts</button>
 <button class="btn g" id="inst" style="display:none" onclick="doInst()">📲 Install as app</button></div></div>
 
@@ -76,7 +77,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 <div class="it" id="bNv" onclick="nvt()"><i>🌙</i>Night Vision</div>
 <div class="it" onclick="send({c:'sw'})"><i>🔄</i>Switch</div>
 <div class="it" id="bFl" onclick="flt()"><i>⚡</i>Flash</div>
-<div class="it" onclick="$('colp').style.display=$('colp').style.display=='block'?'none':'block'"><i>🎨</i>Color</div><div class="it" id="bMo" onclick="mot()"><i>👁</i>Motion: Off</div><div class="it" id="bBk" onclick="stl()"><i>🕶</i>Stealth</div><div class="it" onclick="send({c:'siren'});toast(camAu===false?'Camera sound is locked: tap its screen once':'Siren on camera')"><i>🚨</i>Siren</div></div>
+<div class="it" onclick="$('colp').style.display=$('colp').style.display=='block'?'none':'block'"><i>🎨</i>Color</div><div class="it" id="bMo" onclick="mot()"><i>👁</i>Motion: Off</div><div class="it" id="bBk" onclick="stl()"><i>🕶</i>Stealth</div><div class="it" onclick="send({c:'siren'});toast(camAu===false?'Camera sound is locked: tap its screen once':'Siren on camera')"><i>🚨</i>Siren</div><div class="it" id="bTrk" onclick="trkT()"><i>🎯</i>Track</div><div class="it" onclick="location.href='multi.html'"><i>🧩</i>Cameras</div></div>
 <div id="colp"><label>Brightness<input type="range" id="cb" min="0.4" max="2.5" step="0.05" value="1"></label>
 <label>Contrast<input type="range" id="cc" min="0.4" max="2.5" step="0.05" value="1"></label>
 <label>Saturation<input type="range" id="cs" min="0" max="3" step="0.05" value="1"></label>
@@ -94,7 +95,7 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const VER='v8',$=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v9',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
@@ -201,6 +202,7 @@ async function cmd(d){
   const t=vs&&vs.getVideoTracks()[0],ap=a=>t&&t.applyConstraints({advanced:[a]}).catch(()=>{});
   try{
   if(d.c=='mo')moLvl=d.v;
+  else if(d.c=='tr')trk=d.v;
   else if(d.c=='blk')blk(d.v);
   else if(d.c=='siren')siren();
   else if(d.c=='q'){res=d.v;await openVideo()}
@@ -348,7 +350,7 @@ window.addEventListener('online',()=>{if(want)setTimeout(()=>start(localStorage.
 function lost(){if(!want)return;st('Reconnecting…');$('rv').srcObject=null;clearTimeout(toT);toT=setTimeout(()=>{toT=0;start(localStorage.mc)},3000)}
 function back(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;show('home')}
 function chg(){want=false;peerM&&peerM.destroy();$('rv').srcObject=null;st('');$('cp').style.display='block'}
-function onSt(d){if(d.type=='mo')return alarm(d);if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;camAu=d.au;if(d.err&&d.err!=lastErr)toast('Camera: '+d.err);lastErr=d.err||'';stSeen=1;lastSt=Date.now();if($('stt').textContent.startsWith('Reconnecting controls'))st('🟢 Live');if(d.ver!=VER)st('⚠ Camera phone has an old version: reload its page');q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
+function onSt(d){if(d.type=='mo')return alarm(d);if(d.type=='tr')return track(d);if(d.type!='st')return;off=d.t-Date.now();$('bat').textContent=d.bat==null?'':'🔋'+d.bat+'%';zmCap=d.zoom;camAu=d.au;if(d.err&&d.err!=lastErr)toast('Camera: '+d.err);lastErr=d.err||'';stSeen=1;lastSt=Date.now();if($('stt').textContent.startsWith('Reconnecting controls'))st('🟢 Live');if(d.ver!=VER)st('⚠ Camera phone has an old version: reload its page');q=d.res;$('qt').textContent=d.res;$('qi').textContent=d.res;$('bFl').style.opacity=d.torch?1:.4}
 setInterval(()=>$('ts').textContent=new Date(Date.now()+off).toLocaleString('sv-SE'),1000);
 const ui=()=>{$('mi').textContent=muted?'🔇':'🔊';$('bMute').classList.toggle('on',muted)};
 function unm(){muted=false;$('rv').muted=false;$('rv').play();$('snd').style.display='none';ui()}
@@ -366,6 +368,16 @@ $('zm').oninput=e=>{const z=+e.target.value;
 function fs(){const w=$('vw');if(w.classList.contains('fs')){w.classList.remove('fs');document.fullscreenElement&&document.exitFullscreen();return}
   w.classList.add('fs');w.requestFullscreen&&w.requestFullscreen().catch(()=>{})}
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)$('vw').classList.remove('fs')});
+/* motion tracking: digital zoom that follows the movement */
+let trkOn=false,trkTm=0,tx0=0,ty0=0;
+function trkReset(){clearTimeout(trkTm);tx0=ty0=0;const v=$('rv');v.style.transform=''}
+function trkT(){trkOn=!trkOn;$('bTrk').classList.toggle('on',trkOn);send({c:'tr',v:trkOn?1:0});if(!trkOn)trkReset();toast('Motion tracking: '+(trkOn?'On':'Off'))}
+function track(d){if(!trkOn)return;const W=$('vw').clientWidth,H=$('vw').clientHeight,S=2.2;
+  let tx=-S*(d.x*W-W/2),ty=-S*(d.y*H-H/2);const mx=(S-1)*W/2,my=(S-1)*H/2;
+  tx=Math.max(-mx,Math.min(mx,tx));ty=Math.max(-my,Math.min(my,ty));
+  tx0=tx0*.5+tx*.5;ty0=ty0*.5+ty*.5;
+  $('rv').style.transform='translate('+tx0+'px,'+ty0+'px) scale('+S+')';
+  clearTimeout(trkTm);trkTm=setTimeout(trkReset,3500)}
 /* talk */
 async function tS(e){e.preventDefault();if(talking||!call)return;talking=true;$('bTalk').classList.add('on');$('rv').muted=true;
   try{const m=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
@@ -410,7 +422,7 @@ async function gal(){
 }
 
 /* ===== extras ===== */
-let moLvl=0,pm=null,lastMo=0,lastTg=0,an,ac,taps=[];const MOT=[0,.08,.03,.012];
+let moLvl=0,trk=0,pm=null,lastMo=0,lastTg=0,an,ac,taps=[];const MOT=[0,.08,.03,.012];
 function blk(on){$('dim').style.display=on?'block':'none';if(on)try{document.documentElement.requestFullscreen()}catch(e){}}
 function tap3(){const n=Date.now();taps=taps.filter(t=>n-t<900);taps.push(n);if(taps.length>=3){taps=[];blk(false)}}
 function detect(){
@@ -419,12 +431,13 @@ function detect(){
   setInterval(()=>{$('au').style.display=ac&&ac.state=='running'?'none':'block'},1000);
   document.addEventListener('pointerdown',()=>{ac&&ac.resume();$('ta').play().catch(()=>{})});
   setInterval(()=>{
-    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length;
-    if(!tgA&&!monA)return;const v=$('pv');if(!v.videoWidth)return;
+    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length,trkA=trk&&conns.length;
+    if(!tgA&&!monA&&!trkA)return;const v=$('pv');if(!v.videoWidth)return;
     const lvl=Math.max(monA?moLvl:0,tgA?g.l:0);
-    x.drawImage(v,0,0,64,36);const d=x.getImageData(0,0,64,36).data,gr=new Uint8Array(2304);let n=0;
-    for(let i=0;i<2304;i++){gr[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(pm&&Math.abs(gr[i]-pm[i])>28)n++}
-    const hit=pm&&n/2304>MOT[lvl];pm=gr;
+    x.drawImage(v,0,0,64,36);const d=x.getImageData(0,0,64,36).data,gr=new Uint8Array(2304);let n=0,sx=0,sy=0;
+    for(let i=0;i<2304;i++){gr[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(pm&&Math.abs(gr[i]-pm[i])>28){n++;sx+=i%64;sy+=(i/64|0)}}
+    if(trkA&&pm&&n>=14){const m={type:'tr',x:sx/n/64,y:sy/n/36};conns.forEach(k=>k.open&&k.send(m))}
+    const hit=lvl>0&&pm&&n/2304>MOT[lvl];pm=gr;
     let snd=false;if(an){an.getByteTimeDomainData(buf);let m=0;for(const b of buf)m=Math.max(m,Math.abs(b-128));snd=m>70}
     if(!(hit||snd))return;const now=Date.now(),why=hit?'motion':'sound';
     if(monA&&now-lastMo>10000){lastMo=now;const s=document.createElement('canvas');s.width=480;s.height=270;s.getContext('2d').drawImage(v,0,0,480,270);
@@ -432,7 +445,7 @@ function detect(){
     if(tgA&&now-lastTg>30000){lastTg=now;const s=document.createElement('canvas'),W=Math.min(960,v.videoWidth);s.width=W;s.height=Math.round(W*v.videoHeight/v.videoWidth);
       s.getContext('2d').drawImage(v,0,0,s.width,s.height);
       s.toBlob(async b=>{let bt='';try{const B=await navigator.getBattery();bt=' · 🔋'+Math.round(B.level*100)+'%'}catch(e){}
-        const e=await tgPhoto(b,(why=='sound'?'🔊 Sound detected':'🚨 Motion detected')+' · '+new Date().toLocaleTimeString('sv-SE')+bt);
+        const e=await tgPhoto(b,(why=='sound'?'🔊 Sound detected':'🚨 Motion detected')+' · '+new Date().toLocaleTimeString('sv-SE')+bt+'\n▶ Open live view: '+new URL('index.html#mon='+localStorage.cc,location.href).href);
         if(e){camErr='Telegram: '+e;sendStatus()}},'image/jpeg',.8)}
   },500);
 }
@@ -448,5 +461,7 @@ function alarm(d){
 function beep(){try{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);g.gain.value=.3;o.frequency.value=880;o.start();o.stop(ctx.currentTime+.4)}catch(e){}}
 function mot(){mo=(mo+1)%4;$('bMo').classList.toggle('on',mo>0);$('bMo').lastChild.textContent='Motion: '+['Off','Low','Med','High'][mo];send({c:'mo',v:mo})}
 function stl(){blkOn=!blkOn;$('bBk').classList.toggle('on',blkOn);send({c:'blk',v:blkOn})}
-if(localStorage.role=='cam')startCamera();   /* always-on: resume by itself after reload (permission is remembered on https) */
+const hm=(location.hash.match(/mon=(\d{12})/)||[])[1];
+if(hm){localStorage.mc=hm;$('code').value=hm;show('mon');want=true;start(hm);history.replaceState(null,'',location.pathname)}   /* opened from a Telegram alert link */
+else if(localStorage.role=='cam')startCamera();   /* always-on: resume by itself after reload (permission is remembered on https) */
 </script></body></html>
