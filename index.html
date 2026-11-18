@@ -92,30 +92,43 @@ let vBusy=false,camErr='';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 /* try several ways to open the wanted camera (iOS Safari is picky) */
 async function grab(want){
+  if(!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    throw new Error('Camera access requires HTTPS (or localhost). Open this page using a secure HTTPS address.');
+  }
   const [w,h]=RES[res],md=navigator.mediaDevices,list=[
     {video:{facingMode:{exact:want},width:{ideal:w},height:{ideal:h}}},
-    {video:{facingMode:{ideal:want}}},
-    {video:{facingMode:want}}];
-  try{ /* by device id (labels are known once permission was granted) */
-    const re=want=='user'?/front|user|selfie/i:/back|rear|environment/i;
-    const dev=(await md.enumerateDevices()).filter(d=>d.kind=='videoinput'&&re.test(d.label));
-    dev.forEach(d=>list.push({video:{deviceId:{exact:d.deviceId},width:{ideal:w},height:{ideal:h}}}));
+    {video:{facingMode:{ideal:want},width:{ideal:w},height:{ideal:h}}},
+    {video:{width:{ideal:w},height:{ideal:h}}},
+    {video:true}
+  ];
+  // Once permission is granted, prefer a device whose label matches the requested side.
+  try{
+    const re=want==='user'?/front|user|selfie|前/i:/back|rear|environment|背面/i;
+    const dev=(await md.enumerateDevices()).filter(d=>d.kind==='videoinput'&&re.test(d.label));
+    dev.forEach(d=>list.splice(list.length-1,0,{video:{deviceId:{exact:d.deviceId},width:{ideal:w},height:{ideal:h}}}));
   }catch(e){}
-  list.push({video:true});   /* last resort: any camera is better than none */
   let err;
-  for(const c of list){
-    for(let k=0;k<3;k++){
-      try{const s=await md.getUserMedia(c),f=s.getVideoTracks()[0].getSettings().facingMode;
-        if(f&&f!=want){s.getTracks().forEach(t=>t.stop());err=new Error('wrong camera');break}
-        return s}
-      catch(e){err=e;
-        /* "Could not start video source": camera still busy → wait and retry the same request */
-        if(e&&(e.name=='NotReadableError'||e.name=='AbortError'||/start video|in use/i.test(e.message||'')))await sleep(1000);
-        else break}
+  for(const constraints of list){
+    for(let k=0;k<2;k++){
+      try{
+        const stream=await md.getUserMedia({audio:false,...constraints});
+        const track=stream.getVideoTracks()[0];
+        const actual=track&&track.getSettings?track.getSettings().facingMode:null;
+        if(actual && actual!==want && constraints.video && constraints.video.facingMode?.exact){
+          stream.getTracks().forEach(t=>t.stop());
+          err=new Error('The requested camera is unavailable');
+          break;
+        }
+        return stream;
+      }catch(e){
+        err=e;
+        if(e.name==='NotReadableError'||e.name==='AbortError'||/start video|in use/i.test(e.message||'')) await sleep(800);
+        else break;
+      }
     }
-    await sleep(250);
+    await sleep(200);
   }
-  throw err||new Error('no camera');
+  throw err||new Error('No camera was found');
 }
 async function openVideo(){
   if(vBusy)return;vBusy=true;
@@ -131,6 +144,8 @@ async function openVideo(){
       vs=await grab(facing);
     }
     $('pv').srcObject=vs;
+    $('pv').muted=true;
+    try{await $('pv').play()}catch(playError){console.warn('Preview playback was blocked:',playError)}
     const vt=vs.getVideoTracks()[0];
     cstream=new MediaStream([vt,...(as?as.getAudioTracks():[])]);
     const fm=vt.getSettings().facingMode;if(fm)facing=fm;
@@ -164,8 +179,11 @@ async function startCamera(){
   show('cam');localStorage.role='cam';
   let c=localStorage.cc;if(!c||c.length!=12){c=rnd(6)+rnd(6);localStorage.cc=c}
   pin=c.slice(6);$('ccode').textContent=c.slice(0,6)+'-'+pin;
-  try{as=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){toast('No microphone: video only')}
-  try{await openVideo()}catch(e){camErr=(e.name||'error')+': '+(e.message||'');$('cerr').textContent='⚠ '+camErr+' — retrying…'}
+  $('cerr').textContent='Requesting camera permission…';
+  // Start video first. A denied microphone permission must not prevent the camera from opening.
+  try{await openVideo()}
+  catch(e){camErr=(e.name||'error')+': '+(e.message||'');$('cerr').textContent='⚠ '+camErr;toast(camErr);}
+  try{as=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){toast('Microphone unavailable — video only')}
   makePeer();   /* start anyway: the watchdog keeps retrying the camera */
   setInterval(sendStatus,3000);detect();setTimeout(function f(){ac&&ac.state=='running'?blk(true):setTimeout(f,3000)},10000);
   const wk=async()=>{try{if(!wl||wl.released)wl=await navigator.wakeLock.request('screen')}catch(e){}};wk();setInterval(wk,20000);
@@ -365,5 +383,5 @@ function alarm(d){
 function beep(){try{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);g.gain.value=.3;o.frequency.value=880;o.start();o.stop(ctx.currentTime+.4)}catch(e){}}
 function mot(){mo=(mo+1)%4;$('bMo').classList.toggle('on',mo>0);$('bMo').lastChild.textContent='Motion: '+['Off','Low','Med','High'][mo];send({c:'mo',v:mo})}
 function stl(){blkOn=!blkOn;$('bBk').classList.toggle('on',blkOn);send({c:'blk',v:blkOn})}
-if(localStorage.role=='cam')startCamera();
+// Camera is started only after the user taps the Camera button (browser permission requirement).
 </script></body></html>
