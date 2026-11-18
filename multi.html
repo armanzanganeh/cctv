@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CCTV – All cameras</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0e1116"><link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#0e1116;--card:#171b22;--line:#252b36;--ac:#ff7a5c;--ac2:#ff4d8d;--tx:#e8eaf0;--mut:#8b93a3}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:-apple-system,Segoe UI,Tahoma,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;display:flex;align-items:center;gap:14px;padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));font-size:19px;font-weight:700;box-shadow:0 4px 20px #ff4d8d33;position:relative;z-index:2}
+header .t{flex:1}header b{font-size:22px;font-weight:500;cursor:pointer;width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:#ffffff26}
+#grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;padding:10px;max-width:1200px;margin:auto}
+.tile{position:relative;background:#000;border-radius:16px;overflow:hidden;aspect-ratio:16/10;border:1px solid var(--line)}
+.tile video{width:100%;height:100%;object-fit:contain;display:block}
+.tile.big{position:fixed;inset:0;z-index:50;aspect-ratio:auto;border-radius:0;border:0}
+.nm,.stt,.bt{position:absolute;color:#fff;font:600 12px ui-monospace,monospace;text-shadow:0 0 4px #000;background:#0007;padding:3px 7px;border-radius:8px;pointer-events:none}
+.nm{left:8px;top:8px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{position:absolute;right:10px;top:12px;width:12px;height:12px;border-radius:50%;background:#e11d48;box-shadow:0 0 6px #000}
+.dot.on{background:#22c55e}
+.stt{left:8px;bottom:42px}.bt{right:8px;top:30px}
+.bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:6px;padding:6px;background:linear-gradient(transparent,#000a)}
+.bar button,.bar a{flex:1;text-align:center;padding:7px 4px;font-size:13px;color:#fff;text-decoration:none;background:#ffffff22;border:0;border-radius:10px}
+#empty{text-align:center;color:var(--mut);padding:40px 24px;line-height:1.8}
+#addp{display:none;position:fixed;inset:0;z-index:150;background:#000c;overflow:auto}
+#addp .box{background:var(--card);margin:40px 14px;padding:20px;border-radius:20px;max-width:480px;text-align:center}
+#addp input{width:100%;padding:14px;font-size:16px;text-align:center;border:1px solid var(--line);background:var(--bg);color:var(--tx);border-radius:14px;margin:8px 0;outline:none}
+.btn{width:100%;padding:14px;margin:6px 0;font-size:16px;font-weight:600;border:0;border-radius:14px;background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff}
+.btn.g{background:var(--bg);border:1px solid var(--line);color:var(--tx)}
+#toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 18px;border-radius:24px;opacity:0;transition:.3s;z-index:200;pointer-events:none}
+</style></head><body>
+<header><b onclick="location.href='index.html'">‹</b><span class="t">🧩 All cameras</span><b onclick="addOpen()">＋</b></header>
+<div id="grid"></div>
+<div id="empty">No cameras yet.<br>Tap <b>＋</b> and add each camera phone's 12-digit code with a name<br>(Living room, Bedroom, Entrance…). Up to 6 cameras.</div>
+<div id="addp"><div class="box"><h3 style="margin:0 0 8px">Add camera</h3>
+<input id="an" placeholder="Name (e.g. Living room)" maxlength="24">
+<input id="ac" inputmode="numeric" placeholder="Camera code 123456-123456">
+<button class="btn" onclick="addSave()">Add</button><button class="btn g" onclick="$('addp').style.display='none'">Close</button></div></div>
+<div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),PRE="armancctv-",MAX=6;
+const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
+const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
+let list=[];try{list=JSON.parse(localStorage.mcams||'[]')}catch(e){}
+const cams=[];
+const save=()=>localStorage.mcams=JSON.stringify(cams.map(c=>({name:c.name,code:c.code})));
+/* a silent audio track so the camera's audio is included in the call */
+let ctx,silent;try{ctx=new(window.AudioContext||window.webkitAudioContext)();silent=ctx.createMediaStreamDestination().stream.getAudioTracks()[0]}catch(e){}
+document.addEventListener('pointerdown',()=>ctx&&ctx.resume(),{once:true});
+
+function build(c){
+  const t=document.createElement('div');t.className='tile';
+  t.innerHTML='<video autoplay playsinline muted></video><div class="nm"></div><div class="dot"></div><div class="stt"></div><div class="bt"></div><div class="bar"><button class="snd">🔇</button><a class="ctl">⚙ Controls</a><button class="del">🗑</button></div>';
+  c.t=t;c.v=t.querySelector('video');c.stt=t.querySelector('.stt');c.dot=t.querySelector('.dot');c.bt=t.querySelector('.bt');
+  t.querySelector('.nm').textContent=c.name;
+  const ctl=t.querySelector('.ctl');ctl.href='index.html#mon='+c.code;ctl.onclick=e=>e.stopPropagation();
+  const snd=t.querySelector('.snd');
+  snd.onclick=e=>{e.stopPropagation();c.v.muted=!c.v.muted;snd.textContent=c.v.muted?'🔇':'🔊';ctx&&ctx.resume();c.v.play().catch(()=>{})};
+  t.querySelector('.del').onclick=e=>{e.stopPropagation();if(confirm('Remove '+c.name+'?'))remove(c)};
+  t.onclick=()=>t.classList.toggle('big');
+  $('grid').append(t);
+}
+function setSt(c,txt,on){c.stt.textContent=txt;c.dot.classList.toggle('on',!!on)}
+function connectCam(c){
+  clearTimeout(c.tm);if(c.peer)try{c.peer.destroy()}catch(e){}
+  c.live=false;c.lastSt=Date.now();setSt(c,'Connecting…',false);
+  const id=PRE+c.code.slice(0,6),meta={pin:c.code.slice(6)},peer=c.peer=new Peer({config:ICE});
+  const again=ms=>{if(c.peer!==peer)return;clearTimeout(c.tm);c.tm=setTimeout(()=>{if(c.peer===peer)connectCam(c)},ms)};
+  peer.on('open',()=>{
+    const cv=document.createElement('canvas');cv.width=cv.height=16;cv.getContext('2d').fillRect(0,0,16,16);
+    const o=cv.captureStream(1);silent&&o.addTrack(silent);
+    const dc=peer.connect(id,{metadata:meta,reliable:true});
+    dc.on('data',d=>{if(d.type=='st'){c.lastSt=Date.now();if(d.bat!=null)c.bt.textContent='🔋'+d.bat+'%'}});
+    const call=peer.call(id,o,{metadata:meta});
+    call.on('stream',rs=>{c.v.srcObject=rs;c.v.play().catch(()=>{});c.live=true;c.lastSt=Date.now();setSt(c,'Live',true)});
+    call.on('close',()=>{setSt(c,'Reconnecting…',false);again(3000)});call.on('error',()=>again(3000));
+    const pc=call.peerConnection;
+    pc.oniceconnectionstatechange=()=>{const s=pc.iceConnectionState;if(s=='failed'||s=='closed'){setSt(c,'Reconnecting…',false);again(3000)}
+      if(s=='disconnected')setTimeout(()=>{const x=pc.iceConnectionState;if(x!='connected'&&x!='completed')again(500)},6000)};
+    setTimeout(()=>{if(!c.live)again(500)},15000);
+  });
+  peer.on('disconnected',()=>{try{peer.reconnect()}catch(e){}});
+  peer.on('error',e=>{setSt(c,e.type=='peer-unavailable'?'Camera offline':'Error: '+e.type,false);again(5000)});
+}
+function remove(c){clearTimeout(c.tm);try{c.peer&&c.peer.destroy()}catch(e){}c.t.remove();cams.splice(cams.indexOf(c),1);save();render()}
+const render=()=>{$('empty').style.display=cams.length?'none':'block'};
+function add(name,code){const c={name,code};cams.push(c);build(c);connectCam(c);render()}
+function addOpen(){if(cams.length>=MAX)return toast('Maximum '+MAX+' cameras');
+  $('an').value='';const mc=localStorage.mc||'';$('ac').value=cams.some(c=>c.code==mc)?'':(mc?mc.slice(0,6)+'-'+mc.slice(6):'');$('addp').style.display='block'}
+function addSave(){const code=$('ac').value.replace(/\D/g,''),name=$('an').value.trim()||('Camera '+(cams.length+1));
+  if(code.length!=12)return toast('Code must be 12 digits');if(cams.some(c=>c.code==code))return toast('Already added');
+  add(name,code);save();$('addp').style.display='none'}
+list.forEach(x=>x&&x.code&&add(x.name||'Camera',x.code));render();
+/* keep everything alive */
+setInterval(()=>cams.forEach(c=>{if(c.live&&Date.now()-c.lastSt>25000){c.live=false;setSt(c,'Reconnecting…',false);connectCam(c)}}),5000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){wk();cams.forEach(c=>c.v.play&&c.v.play().catch(()=>{}))}});
+addEventListener('online',()=>setTimeout(()=>cams.forEach(connectCam),1500));
+let wl;const wk=async()=>{try{if(!wl||wl.released)wl=await navigator.wakeLock.request('screen')}catch(e){}};wk();setInterval(wk,20000);
+</script></body></html>
