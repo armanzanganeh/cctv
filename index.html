@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CCTV</title>
+<!DOCTYPE html><html lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CCTV</title><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0e1116"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <style>
 :root{--bg:#0e1116;--card:#171b22;--line:#252b36;--ac:#ff7a5c;--ac2:#ff4d8d;--tx:#e8eaf0;--mut:#8b93a3}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -34,23 +34,32 @@ input.tx:focus{border-color:var(--ac)}
 #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 18px;border-radius:24px;opacity:0;transition:.3s;z-index:200;pointer-events:none}
 #dim{display:none;position:fixed;inset:0;background:#000;z-index:60}
 video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
+#tgp{display:none;position:fixed;inset:0;z-index:150;background:#000c;overflow:auto}
+#tgp .box{background:var(--card);margin:30px 14px;border-radius:20px;max-width:480px}
+#tgp input.tx,#tgp select{font-size:15px;letter-spacing:0;background:var(--bg)}
+#tgp select{width:100%;padding:14px;border-radius:14px;color:var(--tx);border:1px solid var(--line);margin:8px 0}
+#tgp small{display:block;color:var(--mut);text-align:left;direction:ltr;margin:4px 0 10px;line-height:1.5}
+#tgm{margin-top:8px;min-height:20px;font-size:14px;word-break:break-word}
 </style></head><body>
 
-<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v7</small></span></header><div class="box">
+<div id="home" class="pg on"><header><span class="t">📹 CCTV <small style="opacity:.7;font-size:12px">v8</small></span></header><div class="box">
 <button class="btn" onclick="startCamera()">این گوشی «دوربین» است</button>
-<button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button></div></div>
+<button class="btn g" onclick="show('mon');if(!want)$('cp').style.display='block'">این گوشی «مانیتور» است</button>
+<button class="btn g" onclick="tgOpen()">🔔 Telegram alerts</button>
+<button class="btn g" id="inst" style="display:none" onclick="doInst()">📲 Install as app</button></div></div>
 
 <div id="cam" class="pg"><header><span class="t">Camera</span><span id="cbat" style="font-size:16px"></span></header><div class="box">
 <div>Camera code:</div><div id="ccode" style="font-size:30px;letter-spacing:3px;background:#f3f3f3;border-radius:12px;padding:12px;margin:8px 0">------</div>
 <div id="cst" style="color:#8b93a3;margin:8px 0">...</div><div id="cerr" style="color:#ff6b6b;font-size:13px;margin:4px 0;word-break:break-word"></div>
 <button class="btn g" onclick="if(!vBusy){facing=facing=='environment'?'user':'environment';openVideo().catch(e=>{camErr=e.name+': '+e.message;$('cerr').textContent=camErr})}">🔄 Switch camera (test here)</button><div id="au" style="display:none;background:#e11d48;color:#fff;padding:12px;border-radius:14px;margin:8px 0;font-weight:700">🔈 Tap anywhere once to enable siren &amp; talk</div>
 <video id="pv" class="pv" autoplay playsinline muted></video><audio id="ta" autoplay playsinline></audio>
+<button class="btn g" onclick="tgOpen()">🔔 Telegram alerts</button>
 <button class="btn g" onclick="blk(true)">🌑 Black screen (triple-tap to wake)</button>
 <button class="btn g" onclick="localStorage.removeItem('cc');localStorage.removeItem('role');location.reload()">🔑 New code</button><button class="btn g" onclick="localStorage.removeItem('role');location.reload()">↩ Change mode</button></div>
 <div id="dim" onclick="tap3()"></div></div>
 
 <div id="mon" class="pg"><header><b onclick="back()">‹</b><span class="t">Monitor</span><b onclick="gal()">🎞</b><b onclick="chg()">⚙</b></header>
-<div id="cp" class="box" style="display:none"><input id="code" class="tx" inputmode="numeric" placeholder="123456-123456"><button class="btn" onclick="connect()">Connect</button></div>
+<div id="cp" class="box" style="display:none"><input id="code" class="tx" inputmode="numeric" placeholder="123456-123456"><button class="btn" onclick="connect()">Connect</button><button class="btn g" onclick="tgOpen()">🔔 Telegram alerts</button></div>
 <div id="vw"><video id="rv" autoplay playsinline muted></video>
 <div class="ov" id="qt" style="left:10px;top:8px">HD</div><div class="ov" id="bat" style="right:10px;top:8px"></div>
 <div class="ov" id="ts" style="left:0;right:0;top:8px;text-align:center"></div><div class="ov" id="stt" style="left:10px;bottom:8px"></div>
@@ -74,15 +83,42 @@ video.pv{width:100%;max-width:500px;border-radius:16px;background:#000}
 <label><input type="checkbox" id="cg"> Black &amp; white</label><button class="btn g" onclick="colReset()">Reset</button></div></div>
 
 <div id="gl"><header><b onclick="$('gl').style.display='none'">‹</b><span class="t">Recordings &amp; Photos</span></header><div id="gb"></div></div>
+<div id="tgp"><div class="box"><h3 style="margin:0 0 6px">🔔 Telegram alerts</h3>
+<input id="tgt" class="tx" autocomplete="off" placeholder="Bot token  123456:ABC-DEF...">
+<input id="tgc" class="tx" autocomplete="off" inputmode="numeric" placeholder="Chat ID  (e.g. 123456789)">
+<label style="display:block;text-align:left">Motion / sound photo alerts (on the CAMERA phone)
+<select id="tgl"><option value="0">Off</option><option value="1">Low</option><option value="2">Medium</option><option value="3">High</option></select></label>
+<small>Camera phone: sends photo on motion/sound, "camera online / was offline", battery &amp; charger alerts.<br>Monitor phone (optional): tells you if the camera stays unreachable for 2 minutes.</small>
+<button class="btn g" onclick="tgTest()">Send test message</button><button class="btn" onclick="tgSave()">Save</button><button class="btn g" onclick="$('tgp').style.display='none'">Close</button><div id="tgm"></div></div></div>
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const VER='v7',$=id=>document.getElementById(id),PRE="armancctv-";
+const VER='v8',$=id=>document.getElementById(id),PRE="armancctv-";
 const ICE={iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"},{urls:["turn:openrelay.metered.ca:80","turn:openrelay.metered.ca:443","turn:openrelay.metered.ca:443?transport=tcp"],username:"openrelayproject",credential:"openrelayproject"}]};
 const show=id=>document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on',p.id==id));
 const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500)};
 const rnd=n=>String(Math.floor(Math.random()*10**n)).padStart(n,'0');
+
+/* ================= TELEGRAM ================= */
+const tgCfg=()=>{try{return JSON.parse(localStorage.tg||'{}')}catch(e){return{}}};
+const tgOn=()=>{const g=tgCfg();return !!(g.t&&g.c)};
+const fmtD=ms=>{const m=Math.round(ms/60000);return m<60?m+' min':Math.floor(m/60)+' h '+(m%60)+' min'};
+/* returns '' on success, or an error text */
+async function tgSend(text){const g=tgCfg();if(!g.t||!g.c)return 'not configured';
+  try{const r=await fetch('https://api.telegram.org/bot'+g.t+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:g.c,text})});
+    const j=await r.json();return j.ok?'':(j.description||'error')}catch(e){return 'network error'}}
+async function tgPhoto(blob,caption){const g=tgCfg();if(!g.t||!g.c)return 'not configured';
+  try{const f=new FormData();f.append('chat_id',g.c);f.append('caption',caption);f.append('photo',blob,'alert.jpg');
+    const r=await fetch('https://api.telegram.org/bot'+g.t+'/sendPhoto',{method:'POST',body:f});const j=await r.json();return j.ok?'':(j.description||'error')}catch(e){return 'network error'}}
+function tgOpen(){const g=tgCfg();$('tgt').value=g.t||'';$('tgc').value=g.c||'';$('tgl').value=String(g.l||0);$('tgm').textContent='';$('tgp').style.display='block'}
+function tgSave(){localStorage.tg=JSON.stringify({t:$('tgt').value.trim(),c:$('tgc').value.trim(),l:+$('tgl').value});$('tgm').textContent='✅ Saved';setTimeout(()=>$('tgp').style.display='none',700)}
+async function tgTest(){tgSave();$('tgm').textContent='Sending…';const e=await tgSend('✅ CCTV test message from '+(localStorage.role=='cam'?'the CAMERA phone':'this phone'));$('tgm').textContent=e?'❌ '+e:'✅ Sent — check Telegram'}
+/* PWA */
+let instEv=null;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEv=e;$('inst').style.display='block'});
+function doInst(){instEv&&instEv.prompt()}
+if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
 /* ================= CAMERA ================= */
 const RES={SD:[640,360,6e5],HD:[1280,720,1.5e6],FHD:[1920,1080,3e6]};
@@ -190,6 +226,24 @@ async function startCamera(){
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){wk();watch()}});
   window.addEventListener('online',()=>setTimeout(watch,1000));
   setInterval(watch,8000);
+  tgLife();
+}
+/* Telegram life-cycle alerts (camera phone) */
+async function tgLife(){
+  const last=+localStorage.hb||0,gap=Date.now()-last;
+  localStorage.hb=Date.now();setInterval(()=>{localStorage.hb=Date.now()},15000);
+  tgSend('📷 Camera online'+(last&&gap>120000?' — it was OFFLINE for '+fmtD(gap)+' (since '+new Date(last).toLocaleTimeString('sv-SE')+')':''));
+  let offAt=0;addEventListener('offline',()=>{offAt=Date.now()});
+  addEventListener('online',()=>{if(offAt){const d=Date.now()-offAt;offAt=0;setTimeout(()=>tgSend('🌐 Camera internet is back — it was down for '+fmtD(d)),1500)}});
+  try{const b=await navigator.getBattery();let low=0,crit=0;
+    const chk=()=>{const p=Math.round(b.level*100);
+      if(!b.charging&&p<=20&&!low){low=1;tgSend('🪫 Camera battery low: '+p+'%')}
+      if(!b.charging&&p<=8&&!crit){crit=1;tgSend('🔴 Camera battery critical: '+p+'% — it will die soon')}
+      if(b.charging||p>25){low=0;crit=0}};
+    b.addEventListener('levelchange',chk);
+    b.addEventListener('chargingchange',()=>{tgSend(b.charging?'🔌 Camera charger connected':'⚠️ Camera charger DISCONNECTED ('+Math.round(b.level*100)+'%)');chk()});
+    chk();
+  }catch(e){}
 }
 /* self-healing camera peer: always comes back by itself */
 let lastOk=Date.now(),mkT;
@@ -266,7 +320,7 @@ function start(raw){
   peerM.on('error',e=>{st('Error: '+e.type);lost()});
 }
 /* control channel: retries by itself until it works */
-let lastSt=0,dcTry=0,startedAt=0,lastErr='';
+let lastSt=0,dcTry=0,startedAt=0,lastErr='',lostAt=0,offSent=0;
 function openDC(id,meta,me){
   if(me!==peerM||!want)return;
   try{dc&&dc.close()}catch(e){}
@@ -281,7 +335,10 @@ function openDC(id,meta,me){
 setInterval(()=>{
   if(!want||!peerM)return;
   const raw=localStorage.mc,live=$('rv').srcObject;
-  if(!live){if(!toT&&Date.now()-startedAt>16000)lost();return}
+  if(!live){if(!lostAt)lostAt=Date.now();
+    if(!offSent&&tgOn()&&Date.now()-lostAt>120000){offSent=1;tgSend('🔴 Monitor cannot reach the camera for 2 minutes (camera phone off / no internet / page closed)')}
+    if(!toT&&Date.now()-startedAt>16000)lost();return}
+  lostAt=0;if(offSent){offSent=0;tgSend('🟢 Camera is reachable again')}
   const pcs=call&&call.peerConnection&&call.peerConnection.iceConnectionState;
   if(pcs=='failed'||pcs=='closed'){lost();return}
   if(Date.now()-lastSt>10000&&peerM.open){lastSt=Date.now();st('Reconnecting controls…');openDC(PRE+raw.slice(0,6),{pin:raw.slice(6)},peerM)}
@@ -353,7 +410,7 @@ async function gal(){
 }
 
 /* ===== extras ===== */
-let moLvl=0,pm=null,lastMo=0,an,ac,taps=[];const MOT=[0,.08,.03,.012];
+let moLvl=0,pm=null,lastMo=0,lastTg=0,an,ac,taps=[];const MOT=[0,.08,.03,.012];
 function blk(on){$('dim').style.display=on?'block':'none';if(on)try{document.documentElement.requestFullscreen()}catch(e){}}
 function tap3(){const n=Date.now();taps=taps.filter(t=>n-t<900);taps.push(n);if(taps.length>=3){taps=[];blk(false)}}
 function detect(){
@@ -362,13 +419,21 @@ function detect(){
   setInterval(()=>{$('au').style.display=ac&&ac.state=='running'?'none':'block'},1000);
   document.addEventListener('pointerdown',()=>{ac&&ac.resume();$('ta').play().catch(()=>{})});
   setInterval(()=>{
-    if(!moLvl||!conns.length)return;const v=$('pv');if(!v.videoWidth)return;
-    x.drawImage(v,0,0,64,36);const d=x.getImageData(0,0,64,36).data,g=new Uint8Array(2304);let n=0;
-    for(let i=0;i<2304;i++){g[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(pm&&Math.abs(g[i]-pm[i])>28)n++}
-    const hit=pm&&n/2304>MOT[moLvl];pm=g;
+    const g=tgCfg(),tgA=tgOn()&&g.l>0,monA=moLvl&&conns.length;
+    if(!tgA&&!monA)return;const v=$('pv');if(!v.videoWidth)return;
+    const lvl=Math.max(monA?moLvl:0,tgA?g.l:0);
+    x.drawImage(v,0,0,64,36);const d=x.getImageData(0,0,64,36).data,gr=new Uint8Array(2304);let n=0;
+    for(let i=0;i<2304;i++){gr[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;if(pm&&Math.abs(gr[i]-pm[i])>28)n++}
+    const hit=pm&&n/2304>MOT[lvl];pm=gr;
     let snd=false;if(an){an.getByteTimeDomainData(buf);let m=0;for(const b of buf)m=Math.max(m,Math.abs(b-128));snd=m>70}
-    if((hit||snd)&&Date.now()-lastMo>10000){lastMo=Date.now();const s=document.createElement('canvas');s.width=480;s.height=270;s.getContext('2d').drawImage(v,0,0,480,270);
-      const m={type:'mo',why:hit?'motion':'sound',img:s.toDataURL('image/jpeg',.6),t:Date.now()};conns.forEach(k=>k.open&&k.send(m))}
+    if(!(hit||snd))return;const now=Date.now(),why=hit?'motion':'sound';
+    if(monA&&now-lastMo>10000){lastMo=now;const s=document.createElement('canvas');s.width=480;s.height=270;s.getContext('2d').drawImage(v,0,0,480,270);
+      const m={type:'mo',why,img:s.toDataURL('image/jpeg',.6),t:now};conns.forEach(k=>k.open&&k.send(m))}
+    if(tgA&&now-lastTg>30000){lastTg=now;const s=document.createElement('canvas'),W=Math.min(960,v.videoWidth);s.width=W;s.height=Math.round(W*v.videoHeight/v.videoWidth);
+      s.getContext('2d').drawImage(v,0,0,s.width,s.height);
+      s.toBlob(async b=>{let bt='';try{const B=await navigator.getBattery();bt=' · 🔋'+Math.round(B.level*100)+'%'}catch(e){}
+        const e=await tgPhoto(b,(why=='sound'?'🔊 Sound detected':'🚨 Motion detected')+' · '+new Date().toLocaleTimeString('sv-SE')+bt);
+        if(e){camErr='Telegram: '+e;sendStatus()}},'image/jpeg',.8)}
   },500);
 }
 async function siren(){try{await ac.resume();const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.connect(g);g.connect(ac.destination);g.gain.value=.6;o.start();const t=ac.currentTime;for(let i=0;i<20;i++)o.frequency.setValueAtTime(i%2?900:1500,t+i*.25);o.stop(t+5)}catch(e){}}
